@@ -1,8 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { Queue } from '@datastructures-js/queue';
 import EventEmitter from 'events';
 import { Worker } from 'worker_threads';
 import { logger } from './logger.js';
-import { Queue } from '@datastructures-js/queue';
 
 type ResolveFunc = (value: any) => void;
 type RejectFunc = (reason: any) => void;
@@ -159,7 +159,7 @@ class WorkerPool extends EventEmitter {
     param: TParam,
     timeout?: number,
     prioritze?: boolean,
-  ): Promise<TResult> {
+  ): Promise<TResult | null> {
     return new Promise((resolve, reject) => {
       const task = new TaskContainer(param, resolve, reject);
 

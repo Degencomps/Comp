@@ -1,11 +1,11 @@
+import { Queue } from '@datastructures-js/queue';
 import { RpcResponseAndContext, VersionedTransaction } from '@solana/web3.js';
 import EventEmitter from 'events';
-import { logger } from './logger.js';
-import { connection } from './clients/rpc.js';
 import { SimulatedBundleResponse } from 'jito-ts';
+import { connection } from './clients/rpc.js';
+import { logger } from './logger.js';
 import { FilteredTransaction } from './pre-simulation-filter.js';
 import { Timings } from './types.js';
-import { Queue } from '@datastructures-js/queue';
 
 // drop slow sims - usually a sign of high load
 const MAX_SIMULATION_AGE_MS = 200;
@@ -121,4 +121,4 @@ async function* simulate(
   }
 }
 
-export { simulate, SimulationResult };
+export { SimulationResult, simulate };

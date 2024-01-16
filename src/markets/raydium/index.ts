@@ -1,10 +1,12 @@
-import { ApiPoolInfoItem } from '@raydium-io/raydium-sdk';
-import { logger } from '../../logger.js';
-import fs from 'fs';
-import { AccountInfo, PublicKey } from '@solana/web3.js';
-import { DEX, Market, DexLabel } from '../types.js';
 import { RaydiumAmm } from '@jup-ag/core';
-import { connection } from '../../clients/rpc.js';
+import { logger } from '../../logger.js';
+import {
+  JUPITER_MARKETS_CACHE,
+  JupiterDexProgramMap,
+  JupiterMarketCache,
+  tryMakeAmm,
+} from '../jupiter/index.js';
+import { DEX, DexLabel, Market } from '../types.js';
 import { toPairString, toSerializableAccountInfo } from '../utils.js';
 
 // something is wrong with the accounts of these markets
@@ -15,75 +17,60 @@ const MARKETS_TO_IGNORE = [
   '5NBtQe4GPZTRiwrmkwPxNdAuiVFGjQWnihVSqML6ADKT', // pool not tradeable
 ];
 
-const POOLS_JSON = JSON.parse(
-  fs.readFileSync('./src/markets/raydium/mainnet.json', 'utf-8'),
-) as { official: ApiPoolInfoItem[]; unOfficial: ApiPoolInfoItem[] };
-
-logger.debug(
-  `Raydium: Found ${POOLS_JSON.official.length} official pools and ${POOLS_JSON.unOfficial.length} unofficial pools`,
-);
-
-const pools: ApiPoolInfoItem[] = [];
-POOLS_JSON.official.forEach((pool) => pools.push(pool));
-POOLS_JSON.unOfficial.forEach((pool) => pools.push(pool));
-
-const initialAccountBuffers: Map<string, AccountInfo<Buffer>> = new Map();
-const addressesToFetch: PublicKey[] = [];
-
-for (const pool of pools) {
-  addressesToFetch.push(new PublicKey(pool.id));
-  addressesToFetch.push(new PublicKey(pool.marketId));
-}
-
-for (let i = 0; i < addressesToFetch.length; i += 100) {
-  const batch = addressesToFetch.slice(i, i + 100);
-  const accounts = await connection.getMultipleAccountsInfo(batch);
-  for (let j = 0; j < accounts.length; j++) {
-    initialAccountBuffers.set(batch[j].toBase58(), accounts[j]);
-  }
-}
-
 class RaydiumDEX extends DEX {
-  pools: ApiPoolInfoItem[];
+  pools: JupiterMarketCache[];
 
   constructor() {
     super(DexLabel.RAYDIUM);
-    this.pools = pools.filter((pool) => !MARKETS_TO_IGNORE.includes(pool.id));
+
+    this.pools = JUPITER_MARKETS_CACHE.filter(
+      (pool) =>
+        JupiterDexProgramMap[pool.owner] === 'Raydium' &&
+        !MARKETS_TO_IGNORE.includes(pool.pubkey),
+    );
 
     for (const pool of this.pools) {
-      const serumProgramId = new PublicKey(pool.marketProgramId);
-      const serumMarket = new PublicKey(pool.marketId);
-      const serumParams = RaydiumAmm.decodeSerumMarketKeysString(
-        new PublicKey(pool.id),
-        serumProgramId,
-        serumMarket,
-        initialAccountBuffers.get(serumMarket.toBase58()),
-      );
+      const { amm, accountInfo } = tryMakeAmm<RaydiumAmm>(pool) ?? {};
+
+      if (!amm || !accountInfo) {
+        logger.warn('Failed to make AMM for Raydium pool', {
+          pool,
+        });
+        continue;
+      }
 
       this.ammCalcAddPoolMessages.push({
         type: 'addPool',
         payload: {
           poolLabel: this.label,
-          id: pool.id,
-          feeRateBps: 25,
-          serializableAccountInfo: toSerializableAccountInfo(
-            initialAccountBuffers.get(pool.id),
-          ),
-          serumParams: serumParams,
+          id: pool.pubkey,
+          feeRateBps: Math.floor(amm['feePct'] * 10000), // always 0.0025 -> 25 bps
+          serializableAccountInfo: toSerializableAccountInfo(accountInfo),
+          params: pool.params,
         },
       });
+
+      const [tokenMintA, tokenMintB] = amm.reserveTokenMints.map((x) =>
+        x.toBase58(),
+      );
+
+      const [tokenVaultA, tokenVaultB] = [
+        amm.poolCoinTokenAccount,
+        amm.poolPcTokenAccount,
+      ].map((x) => x.toBase58());
+
       const market: Market = {
-        tokenMintA: pool.baseMint,
-        tokenVaultA: pool.baseVault,
-        tokenMintB: pool.quoteMint,
-        tokenVaultB: pool.quoteVault,
+        tokenMintA,
+        tokenVaultA,
+        tokenMintB,
+        tokenVaultB,
         dexLabel: this.label,
-        id: pool.id,
+        id: amm.id,
       };
 
-      const pairString = toPairString(pool.baseMint, pool.quoteMint);
+      const pairString = toPairString(tokenMintA, tokenMintB);
       if (this.pairToMarkets.has(pairString)) {
-        this.pairToMarkets.get(pairString).push(market);
+        this.pairToMarkets.get(pairString)!.push(market);
       } else {
         this.pairToMarkets.set(pairString, [market]);
       }

@@ -1,20 +1,26 @@
-import { JitoRpcConnection as Connection } from 'jito-ts';
+import { Queue } from '@datastructures-js/queue';
 import EventEmitter from 'events';
+import http from 'http';
+import https from 'https';
+import { JitoRpcConnection as Connection } from 'jito-ts';
 import fetch, { RequestInfo, RequestInit, Response } from 'node-fetch';
 import { config } from '../config.js';
 import { logger } from '../logger.js';
-import Agent from 'agentkeepalive';
-import { Queue } from '@datastructures-js/queue';
 
 const RPC_URL = config.get('rpc_url');
 const RPC_REQUESTS_PER_SECOND = config.get('rpc_requests_per_second');
 const RPC_MAX_BATCH_SIZE = config.get('rpc_max_batch_size');
 
-const keepaliveAgent = new Agent({
+const keepaliveOptions: https.AgentOptions | http.AgentOptions = {
   timeout: 4000,
-  freeSocketTimeout: 4000,
   maxSockets: 2048,
-});
+  keepAlive: true,
+  keepAliveMsecs: 5000,
+};
+
+const keepaliveAgent = RPC_URL.startsWith('https')
+  ? new https.Agent(keepaliveOptions)
+  : new http.Agent(keepaliveOptions);
 
 // TokenBucket class for rate limiting requests
 class TokenBucket extends EventEmitter {
@@ -78,8 +84,8 @@ const coalesceFetch = () => {
     if (requestQueue.size() === 0) return;
     logger.debug(`${requestQueue.size()} requests awaiting coalescing`);
 
-    const newBodies = [];
-    const resolves = [];
+    const newBodies: any[] = [];
+    const resolves: any[] = [];
     let lastUrl: RequestInfo;
     let lastOptions: RequestInit;
     const startCoalescing = Date.now();
@@ -89,7 +95,7 @@ const coalesceFetch = () => {
     while (requestQueue.size() > 0 && i < RPC_MAX_BATCH_SIZE) {
       const { url, optionsWithoutDefaults, resolve } = requestQueue.dequeue();
 
-      const body = JSON.parse(optionsWithoutDefaults.body);
+      const body = JSON.parse(optionsWithoutDefaults.body as string);
       body.id = i.toString();
       newBodies.push(body);
       resolves.push(resolve);
@@ -100,11 +106,11 @@ const coalesceFetch = () => {
 
     logger.debug(`Coalescing ${newBodies.length} requests`);
 
-    const response = await fetch(lastUrl, {
+    const response = await fetch(lastUrl!, {
       body: JSON.stringify(newBodies),
-      headers: lastOptions.headers,
-      method: lastOptions.method,
-      agent: lastOptions.agent,
+      headers: lastOptions!.headers,
+      method: lastOptions!.method,
+      agent: lastOptions!.agent,
     });
 
     // If the response is not OK, resolve all Promises with the response
@@ -148,7 +154,6 @@ const coalesceFetch = () => {
     url: RequestInfo,
     optionsWithoutDefaults: RequestInit,
   ): Promise<Response> => {
-    logger.trace(keepaliveAgent.getCurrentStatus(), `agent status:`);
     if (rpcRateLimiter.tryConsume()) {
       return fetch(url, optionsWithoutDefaults);
     } else {
@@ -164,7 +169,7 @@ let connection: Connection;
 if (RPC_REQUESTS_PER_SECOND > 0) {
   connection = new Connection(RPC_URL, {
     commitment: 'processed',
-    fetch: coalesceFetch(),
+    fetch: coalesceFetch() as any,
     disableRetryOnRateLimit: true,
     httpAgent: keepaliveAgent,
   });

@@ -1,46 +1,29 @@
 import {
-  AccountUpdateResultPayload,
-  AddPoolResultPayload,
+  Quote as JupiterQuote,
+  QuoteParams,
+} from '@jup-ag/core/dist/lib/amm.js';
+import { defaultImport } from 'default-import';
+import jsbi from 'jsbi';
+import { config } from '../config.js';
+import { BASE_MINTS_OF_INTEREST_B58 } from '../constants.js';
+import { logger } from '../logger.js';
+import { WorkerPool } from '../worker-pool.js';
+import { MintMarketGraph } from './market-graph.js';
+import { OrcaWhirpoolDEX } from './orca-whirlpool/index.js';
+import { RaydiumClmmDEX } from './raydium-clmm/index.js';
+import { RaydiumDEX } from './raydium/index.js';
+import { SplTokenSwapDEX } from './spl-token-swap/index.js';
+import {
   AmmCalcWorkerParamMessage,
   AmmCalcWorkerResultMessage,
   CalculateQuoteResultPayload,
   CalculateRouteResultPayload,
   DEX,
-  GetSwapLegAndAccountsResultPayload,
   Market,
   Quote,
   SerializableRoute,
 } from './types.js';
-import { OrcaDEX } from './orca/index.js';
-import { MintMarketGraph } from './market-graph.js';
-import { logger } from '../logger.js';
-import { BASE_MINTS_OF_INTEREST_B58 } from '../constants.js';
-import { WorkerPool } from '../worker-pool.js';
-import { OrcaWhirpoolDEX } from './orca-whirlpool/index.js';
-import {
-  Quote as JupiterQuote,
-  QuoteParams,
-  SwapLegAndAccounts,
-  SwapParams,
-} from '@jup-ag/core/dist/lib/amm.js';
-import {
-  toAccountMeta,
-  toJupiterQuote,
-  toSerializableAccountInfo,
-  toSerializableQuoteParams,
-  toSerializableSwapParams,
-} from './utils.js';
-import { RaydiumDEX } from './raydium/index.js';
-import { RaydiumClmmDEX } from './raydium-clmm/index.js';
-import {
-  AccountSubscriptionHandlersMap,
-  geyserAccountUpdateClient,
-} from '../clients/geyser.js';
-import { defaultImport } from 'default-import';
-import jsbi from 'jsbi';
-import { AccountInfo, PublicKey } from '@solana/web3.js';
-import { connection } from '../clients/rpc.js';
-import { config } from '../config.js';
+import { toJupiterQuote, toSerializableQuoteParams } from './utils.js';
 
 const JSBI = defaultImport(jsbi);
 
@@ -54,128 +37,11 @@ await ammCalcWorkerPool.initialize();
 logger.info('Initialized AMM calc worker pool');
 
 const dexs: DEX[] = [
-  new OrcaDEX(),
+  new SplTokenSwapDEX(),
   new OrcaWhirpoolDEX(),
   new RaydiumDEX(),
   new RaydiumClmmDEX(),
 ];
-
-const accountsForGeyserUpdatePromises: Promise<string[]>[] = [];
-
-for (const dex of dexs) {
-  for (const addPoolMessage of dex.getAmmCalcAddPoolMessages()) {
-    const results = ammCalcWorkerPool.runTaskOnAllWorkers<
-      AmmCalcWorkerParamMessage,
-      AmmCalcWorkerResultMessage
-    >(addPoolMessage);
-    const result = Promise.race(results).then((result) => {
-      if (result.type !== 'addPool') {
-        throw new Error('Unexpected result type in addPool response');
-      }
-      const payload = result.payload as AddPoolResultPayload;
-      return payload.accountsForUpdate;
-    });
-    accountsForGeyserUpdatePromises.push(result);
-  }
-}
-
-const accountsForGeyserUpdate = await Promise.all(
-  accountsForGeyserUpdatePromises,
-);
-const accountsForGeyserUpdateFlat = accountsForGeyserUpdate.flat();
-const accountsForGeyserUpdateSet = new Set(accountsForGeyserUpdateFlat);
-
-logger.info('Got account list for pools');
-
-const initialAccountBuffers: Map<string, AccountInfo<Buffer> | null> =
-  new Map();
-const addressesToFetch: PublicKey[] = [...accountsForGeyserUpdateSet].map(
-  (a) => new PublicKey(a),
-);
-
-const fetchAccountPromises: Promise<void>[] = [];
-for (let i = 0; i < addressesToFetch.length; i += 25) {
-  const batch = addressesToFetch.slice(i, i + 25);
-  const promise = connection.getMultipleAccountsInfo(batch).then((accounts) => {
-    for (let j = 0; j < accounts.length; j++) {
-      initialAccountBuffers.set(batch[j].toBase58(), accounts[j]);
-    }
-  });
-  fetchAccountPromises.push(promise);
-}
-
-await Promise.all(fetchAccountPromises);
-
-const seedAccountInfoPromises: Promise<AmmCalcWorkerResultMessage>[] = [];
-
-// seed account info in workers
-for (const [id, accountInfo] of initialAccountBuffers) {
-  const message: AmmCalcWorkerParamMessage = {
-    type: 'accountUpdate',
-    payload: {
-      id,
-      accountInfo: accountInfo ? toSerializableAccountInfo(accountInfo) : null,
-    },
-  };
-  const results = ammCalcWorkerPool.runTaskOnAllWorkers<
-    AmmCalcWorkerParamMessage,
-    AmmCalcWorkerResultMessage
-  >(message);
-  seedAccountInfoPromises.push(...results);
-}
-
-await Promise.all(seedAccountInfoPromises);
-
-logger.info('Seeded account info in workers');
-
-const accountSubscriptionsHandlersMap: AccountSubscriptionHandlersMap =
-  new Map();
-// set up geyser subs
-for (const account of accountsForGeyserUpdateSet) {
-  const callback = async (accountInfo: AccountInfo<Buffer>) => {
-    const message: AmmCalcWorkerParamMessage = {
-      type: 'accountUpdate',
-      payload: {
-        id: account,
-        accountInfo: toSerializableAccountInfo(accountInfo),
-      },
-    };
-    const resultPromises = ammCalcWorkerPool.runTaskOnAllWorkers<
-      AmmCalcWorkerParamMessage,
-      AmmCalcWorkerResultMessage
-    >(message);
-    const results = await Promise.all(resultPromises);
-
-    const error = results.find((result) => {
-      const payload = result.payload as AccountUpdateResultPayload;
-      return payload.error === true;
-    });
-
-    if (error) {
-      logger.warn(
-        `Error updating pool account ${account}, re-seeding with data from rpc`,
-      );
-      const accountInfo = await connection.getAccountInfo(
-        new PublicKey(account),
-      );
-      const message: AmmCalcWorkerParamMessage = {
-        type: 'accountUpdate',
-        payload: {
-          id: account,
-          accountInfo: toSerializableAccountInfo(accountInfo),
-        },
-      };
-      ammCalcWorkerPool.runTaskOnAllWorkers<
-        AmmCalcWorkerParamMessage,
-        AmmCalcWorkerResultMessage
-      >(message);
-    }
-  };
-  accountSubscriptionsHandlersMap.set(account, [callback]);
-}
-
-geyserAccountUpdateClient.addSubscriptions(accountSubscriptionsHandlersMap);
-logger.info('Initialized geyser update handlers');
 
 // both vaults of all markets where one side of the market is USDC or SOL
 const tokenAccountsOfInterest = new Map<string, Market>();
@@ -202,8 +68,13 @@ const isTokenAccountOfInterest = (tokenAccount: string): boolean => {
   return tokenAccountsOfInterest.has(tokenAccount);
 };
 
-function getMarketForVault(vault: string): Market {
+function getMarketForVault(vault: string): Market | undefined {
   const market = tokenAccountsOfInterest.get(vault);
+
+  if (market === undefined) {
+    logger.warn(`No market found for vault ${vault}`);
+    return undefined;
+  }
 
   return market;
 }
@@ -232,7 +103,7 @@ function getAll2HopRoutes(
 
   if (routeCache.has(cacheKey)) {
     logger.debug(`Cache hit for ${cacheKey}`);
-    return routeCache.get(cacheKey);
+    return routeCache.get(cacheKey)!;
   }
   const sourceNeighbours = marketGraph.getNeighbours(sourceMint);
   const destNeighbours = marketGraph.getNeighbours(destinationMint);
@@ -306,33 +177,6 @@ async function calculateQuote(
   return quote;
 }
 
-async function calculateSwapLegAndAccounts(
-  poolId: string,
-  params: SwapParams,
-  timeout?: number,
-  prioritze?: boolean,
-): Promise<SwapLegAndAccounts> {
-  logger.debug(
-    `Calculating SwapLegAndAccounts for ${poolId} ${JSON.stringify(params)}`,
-  );
-  const serializableSwapParams = toSerializableSwapParams(params);
-  const message: AmmCalcWorkerParamMessage = {
-    type: 'getSwapLegAndAccounts',
-    payload: {
-      id: poolId,
-      params: serializableSwapParams,
-    },
-  };
-  const result = await ammCalcWorkerPool.runTask<
-    AmmCalcWorkerParamMessage,
-    AmmCalcWorkerResultMessage
-  >(message, timeout, prioritze);
-
-  const payload = result.payload as GetSwapLegAndAccountsResultPayload;
-  const [leg, accounts] = payload.swapLegAndAccounts;
-  return [leg, accounts.map(toAccountMeta)];
-}
-
 async function calculateRoute(
   route: SerializableRoute,
   timeout?: number,
@@ -359,11 +203,10 @@ async function calculateRoute(
 
 export {
   DEX,
-  isTokenAccountOfInterest,
+  calculateQuote,
+  calculateRoute,
+  getAll2HopRoutes,
   getMarketForVault,
   getMarketsForPair,
-  getAll2HopRoutes,
-  calculateQuote,
-  calculateSwapLegAndAccounts,
-  calculateRoute,
+  isTokenAccountOfInterest,
 };

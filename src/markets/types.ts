@@ -1,13 +1,13 @@
-import { AccountInfo, PublicKey } from '@solana/web3.js';
-import { toPairString } from './utils.js';
-import { BASE_MINTS_OF_INTEREST } from '../constants.js';
 import { SwapLegType } from '@jup-ag/core/dist/lib/jupiterEnums.js';
-import jsbi from 'jsbi';
+import { AccountInfo } from '@solana/web3.js';
+import { BASE_MINTS_OF_INTEREST } from '../constants.js';
+import { JsbiType } from '../types.js';
+import { toPairString } from './utils.js';
 
 export type BASE_MINT_OF_INTEREST = typeof BASE_MINTS_OF_INTEREST;
 
 export enum DexLabel {
-  ORCA = 'Orca',
+  SPL_TOKEN_SWAP = 'SPL Token Swap',
   ORCA_WHIRLPOOLS = 'Orca (Whirlpools)',
   RAYDIUM = 'Raydium',
   RAYDIUM_CLMM = 'Raydium CLMM',
@@ -56,23 +56,12 @@ export type SerializableAccountInfoMap = Map<
   SerializableAccountInfo | null
 >;
 
-type SerumMarketKeys = {
-  serumBids: PublicKey;
-  serumAsks: PublicKey;
-  serumEventQueue: PublicKey;
-  serumCoinVaultAccount: PublicKey;
-  serumPcVaultAccount: PublicKey;
-  serumVaultSigner: PublicKey;
-};
-
-export type SerumMarketKeysString = Record<keyof SerumMarketKeys, string>;
-
 export type AddPoolParamPayload = {
   poolLabel: DexLabel;
   id: string;
   feeRateBps: number;
   serializableAccountInfo: SerializableAccountInfo;
-  serumParams?: SerumMarketKeysString;
+  params?: any;
 };
 
 export type AddPoolResultPayload = {
@@ -124,16 +113,8 @@ export type AmmCalcWorkerParamMessage =
       payload: AddPoolParamPayload;
     }
   | {
-      type: 'accountUpdate';
-      payload: AccountUpdateParamPayload;
-    }
-  | {
       type: 'calculateQuote';
       payload: CalculateQuoteParamPayload;
-    }
-  | {
-      type: 'getSwapLegAndAccounts';
-      payload: GetSwapLegAndAccountsParamPayload;
     }
   | {
       type: 'calculateRoute';
@@ -146,16 +127,8 @@ export type AmmCalcWorkerResultMessage =
       payload: AddPoolResultPayload;
     }
   | {
-      type: 'accountUpdate';
-      payload: AccountUpdateResultPayload;
-    }
-  | {
       type: 'calculateQuote';
       payload: CalculateQuoteResultPayload;
-    }
-  | {
-      type: 'getSwapLegAndAccounts';
-      payload: GetSwapLegAndAccountsResultPayload;
     }
   | {
       type: 'calculateRoute';
@@ -223,10 +196,10 @@ export type SerializableRoute = {
   tradeOutputOverride: null | {
     in: string;
     estimatedOut: string;
-  }
+  };
 }[];
 
-export type Quote = { in: jsbi.default; out: jsbi.default };
+export type Quote = { in: JsbiType; out: JsbiType };
 export type SerializableQuote = {
   in: string;
   out: string;

@@ -1,11 +1,11 @@
+import bs58 from 'bs58';
+import { stringify } from 'csv-stringify';
+import * as fs from 'fs';
+import { Bundle as JitoBundle } from 'jito-ts/dist/sdk/block-engine/types.js';
 import { Arb } from './build-bundle.js';
 import { searcherClient } from './clients/jito.js';
-import { logger } from './logger.js';
-import { Bundle as JitoBundle } from 'jito-ts/dist/sdk/block-engine/types.js';
-import bs58 from 'bs58';
 import { connection } from './clients/rpc.js';
-import * as fs from 'fs';
-import { stringify } from 'csv-stringify';
+import { logger } from './logger.js';
 
 const CHECK_LANDED_DELAY_MS = 30000;
 
@@ -55,7 +55,7 @@ stringifier.pipe(tradesCsv);
 const bundlesInTransit = new Map<string, Trade>();
 
 async function processCompletedTrade(uuid: string) {
-  const trade = bundlesInTransit.get(uuid);
+  const trade = bundlesInTransit.get(uuid)!;
 
   const txn0Signature = bs58.encode(trade.bundle[0].signatures[0]);
   const txn1Signature = bs58.encode(trade.bundle[1].signatures[0]);
@@ -120,22 +120,22 @@ async function sendBundle(bundleIterator: AsyncGenerator<Arb>): Promise<void> {
       const isRejected = bundleResult.rejected;
       if (isAccepted) {
         logger.info(
-          `Bundle ${bundleId} accepted in slot ${bundleResult.accepted.slot}`,
+          `Bundle ${bundleId} accepted in slot ${bundleResult.accepted!.slot}`,
         );
         if (bundlesInTransit.has(bundleId)) {
-          bundlesInTransit.get(bundleId).accepted += 1;
+          bundlesInTransit.get(bundleId)!.accepted += 1;
         }
       }
       if (isRejected) {
         logger.info(bundleResult.rejected, `Bundle ${bundleId} rejected:`);
         if (bundlesInTransit.has(bundleId)) {
-          const trade: Trade = bundlesInTransit.get(bundleId);
+          const trade: Trade = bundlesInTransit.get(bundleId)!;
           trade.rejected = true;
-          const rejectedEntry = Object.entries(bundleResult.rejected).find(
+          const rejectedEntry = Object.entries(bundleResult.rejected!).find(
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
             ([_, value]) => value !== undefined,
           );
-          const [errorType, errorContent] = rejectedEntry;
+          const [errorType, errorContent] = rejectedEntry!;
           trade.errorType = errorType;
           trade.errorContent = JSON.stringify(errorContent);
         }

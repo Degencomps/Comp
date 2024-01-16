@@ -1,8 +1,8 @@
-import { logger } from '../../logger.js';
-import fs from 'fs';
 import { AccountInfo, PublicKey } from '@solana/web3.js';
-import { DEX, Market, DexLabel } from '../types.js';
+import fs from 'fs';
 import { connection } from '../../clients/rpc.js';
+import { logger } from '../../logger.js';
+import { DEX, DexLabel, Market } from '../types.js';
 import { toPairString, toSerializableAccountInfo } from '../utils.js';
 
 // something is wrong with the accounts of these markets
@@ -16,7 +16,7 @@ type PoolItem = {
   vaultB: string;
   ammConfig: {
     tradeFeeRate: number;
-  }
+  };
 };
 
 const POOLS_JSON = JSON.parse(
@@ -40,7 +40,9 @@ for (let i = 0; i < addressesToFetch.length; i += 100) {
   const batch = addressesToFetch.slice(i, i + 100);
   const accounts = await connection.getMultipleAccountsInfo(batch);
   for (let j = 0; j < accounts.length; j++) {
-    initialAccountBuffers.set(batch[j].toBase58(), accounts[j]);
+    if (accounts[j]) {
+      initialAccountBuffers.set(batch[j].toBase58(), accounts[j]!);
+    }
   }
 }
 
@@ -51,15 +53,22 @@ class RaydiumClmmDEX extends DEX {
     super(DexLabel.RAYDIUM_CLMM);
     this.pools = pools.filter((pool) => !MARKETS_TO_IGNORE.includes(pool.id));
     for (const pool of this.pools) {
+      const initialAccountInfo = initialAccountBuffers.get(pool.id);
+      if (!initialAccountInfo) {
+        logger.warn(
+          `Raydium CLMM: No initial account info for pool ${pool.id}`,
+        );
+        continue;
+      }
+
       this.ammCalcAddPoolMessages.push({
         type: 'addPool',
         payload: {
           poolLabel: this.label,
           id: pool.id,
           feeRateBps: Math.floor(pool.ammConfig.tradeFeeRate / 100),
-          serializableAccountInfo: toSerializableAccountInfo(
-            initialAccountBuffers.get(pool.id),
-          ),
+          serializableAccountInfo:
+            toSerializableAccountInfo(initialAccountInfo),
         },
       });
 
@@ -71,10 +80,10 @@ class RaydiumClmmDEX extends DEX {
         dexLabel: this.label,
         id: pool.id,
       };
-      
+
       const pairString = toPairString(pool.mintA, pool.mintB);
       if (this.pairToMarkets.has(pairString)) {
-        this.pairToMarkets.get(pairString).push(market);
+        this.pairToMarkets.get(pairString)!.push(market);
       } else {
         this.pairToMarkets.set(pairString, [market]);
       }

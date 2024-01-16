@@ -1,24 +1,24 @@
 import { VersionedTransaction } from '@solana/web3.js';
+import bs58 from 'bs58';
 import { defaultImport } from 'default-import';
 import jsbi from 'jsbi';
-import { prioritize, shuffle, toDecimalString } from './utils.js';
 import { config } from './config.js';
-import { logger } from './logger.js';
-import {
-  calculateRoute as workerCalculateRoute,
-  getAll2HopRoutes,
-  getMarketsForPair,
-} from './markets/index.js';
-import { Market, SerializableRoute } from './markets/types.js';
-import { BackrunnableTrade } from './post-simulation-filter.js';
-import { Timings } from './types.js';
 import {
   SOLEND_FLASHLOAN_FEE_BPS,
   SOL_DECIMALS,
   USDC_DECIMALS,
   USDC_MINT_STRING,
 } from './constants.js';
-import bs58 from 'bs58';
+import { logger } from './logger.js';
+import {
+  getAll2HopRoutes,
+  getMarketsForPair,
+  calculateRoute as workerCalculateRoute,
+} from './markets/index.js';
+import { Market, SerializableRoute } from './markets/types.js';
+import { BackrunnableTrade } from './post-simulation-filter.js';
+import { JsbiType, Timings } from './types.js';
+import { prioritize, shuffle, toDecimalString } from './utils.js';
 
 const JSBI = defaultImport(jsbi);
 
@@ -26,34 +26,35 @@ const ARB_CALCULATION_NUM_STEPS = config.get('arb_calculation_num_steps');
 const MAX_ARB_CALCULATION_TIME_MS = config.get('max_arb_calculation_time_ms');
 const HIGH_WATER_MARK = 5000;
 
-// rough ratio usdc (in decimals) to sol (in lamports) used in priority queue
-// assuming 1 sol = 20 usdc and 1 sol has 3 more decimals than usdc
-// this means one unit of usdc equals x units of sol
-const USDC_SOL_RATO = 50n;
+const USDC_SOL_PRICE = 100;
+// ratio in lamports
+// multiply by 1000 since USDC is 6 decimals and SOL is 9 decimals to get lamport for lamport equivalence
+// then divice by SOL/USDC price to get USDC -> SOL ratio
+const USDC_SOL_RATIO = BigInt(Math.floor(1000 / USDC_SOL_PRICE));
 const MAX_TRADE_AGE_MS = 200;
 
 type Route = {
   market: Market;
   fromA: boolean;
   tradeOutputOverride: null | {
-    in: jsbi.default;
-    estimatedOut: jsbi.default;
+    in: JsbiType;
+    estimatedOut: JsbiType;
   };
 }[];
 
-type Quote = { in: jsbi.default; out: jsbi.default };
+type Quote = { in: JsbiType; out: JsbiType };
 
 type ArbIdea = {
   txn: VersionedTransaction;
-  arbSize: jsbi.default;
-  expectedProfit: jsbi.default;
+  arbSize: JsbiType;
+  expectedProfit: JsbiType;
   route: Route;
   timings: Timings;
 };
 
 async function calculateRoute(
   route: Route,
-  arbSize: jsbi.default,
+  arbSize: JsbiType,
   timeout: number,
 ): Promise<Quote> {
   const arbSizeString = arbSize.toString();
@@ -119,13 +120,13 @@ async function* calculateArb(
         ? tradeA.tradeSizeA
         : tradeA.tradeSizeB;
       const tradeASizeNormalized = tradeAIsUsdc
-        ? tradeASize * USDC_SOL_RATO
+        ? tradeASize * USDC_SOL_RATIO
         : tradeASize;
       const tradeBSize = tradeB.baseIsTokenA
         ? tradeB.tradeSizeA
         : tradeB.tradeSizeB;
       const tradeBSizeNormalized = tradeBisUsdc
-        ? tradeBSize * USDC_SOL_RATO
+        ? tradeBSize * USDC_SOL_RATIO
         : tradeBSize;
 
       if (tradeASizeNormalized < tradeBSizeNormalized) {
@@ -393,7 +394,11 @@ async function* calculateArb(
     }, '');
 
     logger.info(
-      `Potential arb: profit ${profitDecimals} ${backrunSourceMintName} on ${originalMarket.dexLabel} ::: BUY ${arbSizeDecimals} on ${marketsString} backrunning ${bs58.encode(txn.signatures[0])}`,
+      `Potential arb: profit ${profitDecimals} ${backrunSourceMintName} on ${
+        originalMarket.dexLabel
+      } ::: BUY ${arbSizeDecimals} on ${marketsString} backrunning ${bs58.encode(
+        txn.signatures[0],
+      )}`,
     );
 
     yield {
@@ -414,4 +419,4 @@ async function* calculateArb(
   }
 }
 
-export { calculateArb, ArbIdea };
+export { ArbIdea, calculateArb };

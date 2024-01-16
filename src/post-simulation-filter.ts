@@ -1,17 +1,17 @@
+import * as Token from '@solana/spl-token-3';
 import {
   PublicKey,
   SimulatedTransactionAccountInfo,
   VersionedTransaction,
 } from '@solana/web3.js';
-import { SimulationResult } from './simulation.js';
-import * as Token from '@solana/spl-token-3';
-import { Market } from './markets/types.js';
-import { getMarketForVault } from './markets/index.js';
-import { Timings } from './types.js';
-import { dropBeyondHighWaterMark } from './utils.js';
+import bs58 from 'bs58';
 import { BASE_MINTS_OF_INTEREST_B58 } from './constants.js';
 import { logger } from './logger.js';
-import bs58 from 'bs58';
+import { getMarketForVault } from './markets/index.js';
+import { Market } from './markets/types.js';
+import { SimulationResult } from './simulation.js';
+import { Timings } from './types.js';
+import { dropBeyondHighWaterMark } from './utils.js';
 
 const HIGH_WATER_MARK = 100;
 
@@ -71,6 +71,13 @@ async function* postSimulateFilter(
     const postSimTokenAccounts = new Map<string, Token.Account>();
 
     for (let i = 0; i < accountsOfInterest.length; i++) {
+      if (
+        !txnSimulationResult.preExecutionAccounts?.[i] ||
+        !txnSimulationResult.postExecutionAccounts?.[i]
+      ) {
+        continue;
+      }
+
       const accountOfInterest = accountsOfInterest[i];
       const preSimState = txnSimulationResult.preExecutionAccounts[i];
       const postSimState = txnSimulationResult.postExecutionAccounts[i];
@@ -88,7 +95,7 @@ async function* postSimulateFilter(
       postSimTokenAccounts.set(accountOfInterest, postSimTokenAccount);
 
       const market = getMarketForVault(accountOfInterest);
-      markets.add(market);
+      if (market) markets.add(market);
     }
 
     for (const market of markets) {
@@ -108,6 +115,15 @@ async function* postSimulateFilter(
       const tokenAIsBase =
         market.tokenMintA === BASE_MINTS_OF_INTEREST_B58.SOL ||
         market.tokenMintA === BASE_MINTS_OF_INTEREST_B58.USDC;
+
+      if (
+        !preSimTokenAccountVaultA ||
+        !postSimTokenAccountVaultA ||
+        !preSimTokenAccountVaultB ||
+        !postSimTokenAccountVaultB
+      ) {
+        continue;
+      }
 
       const tokenADiff =
         postSimTokenAccountVaultA.amount - preSimTokenAccountVaultA.amount;
@@ -160,4 +176,4 @@ async function* postSimulateFilter(
   }
 }
 
-export { postSimulateFilter, BackrunnableTrade };
+export { BackrunnableTrade, postSimulateFilter };

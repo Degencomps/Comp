@@ -1,9 +1,9 @@
 import * as whirpools from '@orca-so/whirlpools-sdk';
-import { connection } from '../../clients/rpc.js';
-import fs from 'fs';
-import { logger } from '../../logger.js';
 import { AccountInfo, PublicKey } from '@solana/web3.js';
-import { DEX, Market, DexLabel } from '../types.js';
+import fs from 'fs';
+import { connection } from '../../clients/rpc.js';
+import { logger } from '../../logger.js';
+import { DEX, DexLabel, Market } from '../types.js';
 import { toPairString, toSerializableAccountInfo } from '../utils.js';
 
 // something is wrong with the accounts of these markets
@@ -37,7 +37,9 @@ for (let i = 0; i < poolsPubkeys.length; i += 100) {
   const batch = poolsPubkeys.slice(i, i + 100);
   const accounts = await connection.getMultipleAccountsInfo(batch);
   for (let j = 0; j < accounts.length; j++) {
-    initialAccountBuffers.set(batch[j].toBase58(), accounts[j]);
+    if (accounts[j]) {
+      initialAccountBuffers.set(batch[j].toBase58(), accounts[j]!);
+    }
   }
 }
 
@@ -62,6 +64,16 @@ class OrcaWhirpoolDEX extends DEX {
     }
 
     for (const pool of this.pools) {
+      const initialAccountInfo = initialAccountBuffers.get(
+        pool.address.toBase58(),
+      );
+      if (!initialAccountInfo) {
+        logger.warn(
+          `Orca (Whirlpools): No initial account info for pool ${pool.address.toBase58()}`,
+        );
+        continue;
+      }
+
       this.ammCalcAddPoolMessages.push({
         type: 'addPool',
         payload: {
@@ -69,7 +81,7 @@ class OrcaWhirpoolDEX extends DEX {
           id: pool.address.toBase58(),
           feeRateBps: Math.floor(pool.feeRate / 100),
           serializableAccountInfo: toSerializableAccountInfo(
-            initialAccountBuffers.get(pool.address.toBase58()),
+            initialAccountInfo!,
           ),
         },
       });
@@ -88,7 +100,7 @@ class OrcaWhirpoolDEX extends DEX {
         pool.tokenMintB.toBase58(),
       );
       if (this.pairToMarkets.has(pairString)) {
-        this.pairToMarkets.get(pairString).push(market);
+        this.pairToMarkets.get(pairString)!.push(market);
       } else {
         this.pairToMarkets.set(pairString, [market]);
       }
