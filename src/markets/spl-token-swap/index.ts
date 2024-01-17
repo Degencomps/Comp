@@ -17,7 +17,7 @@ export const SPL_TOKEN_SWAP_DEXES: JupiterDexProgramLabel[] = [
   'Bonkswap',
   'Orca V1',
   'Orca V2',
-  'Raydium',
+  // 'Raydium', // raydium is already handled by raydium amm
   'Token Swap',
   'StepN',
 ];

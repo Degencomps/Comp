@@ -27,3 +27,5 @@ build/
 .env*.local
 *.trades.csv
 trades.csv
+
+auth.json
