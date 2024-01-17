@@ -2,7 +2,7 @@ import { AccountInfo, PublicKey } from '@solana/web3.js';
 import fs from 'fs';
 import { connection } from '../../clients/rpc.js';
 import { logger } from '../../logger.js';
-import { DEX, DexLabel, Market } from '../types.js';
+import { DEX, Market } from '../types.js';
 import { toPairString, toSerializableAccountInfo } from '../utils.js';
 
 // something is wrong with the accounts of these markets
@@ -50,7 +50,7 @@ class RaydiumClmmDEX extends DEX {
   pools: PoolItem[];
 
   constructor() {
-    super(DexLabel.RAYDIUM_CLMM);
+    super();
     this.pools = pools.filter((pool) => !MARKETS_TO_IGNORE.includes(pool.id));
     for (const pool of this.pools) {
       const initialAccountInfo = initialAccountBuffers.get(pool.id);
@@ -64,7 +64,7 @@ class RaydiumClmmDEX extends DEX {
       this.ammCalcAddPoolMessages.push({
         type: 'addPool',
         payload: {
-          poolLabel: this.label,
+          poolLabel: 'Raydium CLMM',
           id: pool.id,
           feeRateBps: Math.floor(pool.ammConfig.tradeFeeRate / 100),
           serializableAccountInfo:
@@ -77,7 +77,7 @@ class RaydiumClmmDEX extends DEX {
         tokenVaultA: pool.vaultA,
         tokenMintB: pool.mintB,
         tokenVaultB: pool.vaultB,
-        dexLabel: this.label,
+        dexLabel: 'Raydium CLMM',
         id: pool.id,
       };
 

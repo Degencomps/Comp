@@ -2,35 +2,27 @@ import { SwapLegType } from '@jup-ag/core/dist/lib/jupiterEnums.js';
 import { AccountInfo } from '@solana/web3.js';
 import { BASE_MINTS_OF_INTEREST } from '../constants.js';
 import { JsbiType } from '../types.js';
+import { JupiterDexProgramLabel } from './jupiter/index.js';
 import { toPairString } from './utils.js';
 
 export type BASE_MINT_OF_INTEREST = typeof BASE_MINTS_OF_INTEREST;
-
-export enum DexLabel {
-  SPL_TOKEN_SWAP = 'SPL Token Swap',
-  ORCA_WHIRLPOOLS = 'Orca (Whirlpools)',
-  RAYDIUM = 'Raydium',
-  RAYDIUM_CLMM = 'Raydium CLMM',
-}
 
 export type Market = {
   tokenMintA: string;
   tokenVaultA: string;
   tokenMintB: string;
   tokenVaultB: string;
-  dexLabel: DexLabel;
+  dexLabel: JupiterDexProgramLabel;
   id: string;
 };
 
 export abstract class DEX {
   pairToMarkets: Map<string, Market[]>;
   ammCalcAddPoolMessages: AmmCalcWorkerParamMessage[];
-  label: DexLabel;
 
-  constructor(label: DexLabel) {
+  constructor() {
     this.pairToMarkets = new Map();
     this.ammCalcAddPoolMessages = [];
-    this.label = label;
   }
 
   getAmmCalcAddPoolMessages(): AmmCalcWorkerParamMessage[] {
@@ -57,7 +49,7 @@ export type SerializableAccountInfoMap = Map<
 >;
 
 export type AddPoolParamPayload = {
-  poolLabel: DexLabel;
+  poolLabel: JupiterDexProgramLabel;
   id: string;
   feeRateBps: number;
   serializableAccountInfo: SerializableAccountInfo;
@@ -69,16 +61,6 @@ export type AddPoolResultPayload = {
   accountsForUpdate: string[];
 };
 
-export type AccountUpdateParamPayload = {
-  id: string;
-  accountInfo: SerializableAccountInfo;
-};
-
-export type AccountUpdateResultPayload = {
-  id: string;
-  error: boolean;
-};
-
 export type CalculateQuoteParamPayload = {
   id: string;
   params: SerializableQuoteParams;
@@ -88,15 +70,6 @@ export type CalculateQuoteResultPayload = {
   quote: SerializableJupiterQuote | null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   error?: any;
-};
-
-export type GetSwapLegAndAccountsParamPayload = {
-  id: string;
-  params: SerializableSwapParams;
-};
-
-export type GetSwapLegAndAccountsResultPayload = {
-  swapLegAndAccounts: SerializableSwapLegAndAccounts;
 };
 
 export type CalculateRouteParamPayload = {

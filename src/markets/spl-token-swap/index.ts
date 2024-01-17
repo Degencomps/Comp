@@ -7,7 +7,7 @@ import {
   JupiterMarketCache,
   tryMakeAmm,
 } from '../jupiter/index.js';
-import { DEX, DexLabel, Market } from '../types.js';
+import { DEX, Market } from '../types.js';
 import { toPairString, toSerializableAccountInfo } from '../utils.js';
 
 // something is wrong with the accounts of these markets
@@ -17,7 +17,6 @@ export const SPL_TOKEN_SWAP_DEXES: JupiterDexProgramLabel[] = [
   'Bonkswap',
   'Orca V1',
   'Orca V2',
-  // 'Raydium', // raydium is already handled by raydium amm
   'Token Swap',
   'StepN',
 ];
@@ -26,7 +25,7 @@ class SplTokenSwapDEX extends DEX {
   pools: JupiterMarketCache[];
 
   constructor() {
-    super(DexLabel.SPL_TOKEN_SWAP);
+    super();
 
     this.pools = JUPITER_MARKETS_CACHE.filter(
       (pool) =>
@@ -35,6 +34,7 @@ class SplTokenSwapDEX extends DEX {
     );
 
     for (const pool of this.pools) {
+      const dexLabel = JupiterDexProgramMap[pool.owner];
       const { amm, accountInfo } = tryMakeAmm<SplTokenSwapAmm>(pool) ?? {};
 
       if (!amm || !accountInfo) {
@@ -45,7 +45,7 @@ class SplTokenSwapDEX extends DEX {
       this.ammCalcAddPoolMessages.push({
         type: 'addPool',
         payload: {
-          poolLabel: this.label,
+          poolLabel: dexLabel,
           id: pool.pubkey,
           feeRateBps: Math.floor(amm['feePct'] * 10000), // eg 0.003 -> 25 bps
           serializableAccountInfo: toSerializableAccountInfo(accountInfo),
@@ -66,7 +66,7 @@ class SplTokenSwapDEX extends DEX {
         tokenVaultA,
         tokenMintB,
         tokenVaultB,
-        dexLabel: this.label,
+        dexLabel,
         id: amm.id,
       };
 

@@ -6,7 +6,7 @@ import {
   JupiterMarketCache,
   tryMakeAmm,
 } from '../jupiter/index.js';
-import { DEX, DexLabel, Market } from '../types.js';
+import { DEX, Market } from '../types.js';
 import { toPairString, toSerializableAccountInfo } from '../utils.js';
 
 // something is wrong with the accounts of these markets
@@ -21,7 +21,7 @@ class RaydiumDEX extends DEX {
   pools: JupiterMarketCache[];
 
   constructor() {
-    super(DexLabel.RAYDIUM);
+    super();
 
     this.pools = JUPITER_MARKETS_CACHE.filter(
       (pool) =>
@@ -42,7 +42,7 @@ class RaydiumDEX extends DEX {
       this.ammCalcAddPoolMessages.push({
         type: 'addPool',
         payload: {
-          poolLabel: this.label,
+          poolLabel: 'Raydium',
           id: pool.pubkey,
           feeRateBps: Math.floor(amm['feePct'] * 10000), // always 0.0025 -> 25 bps
           serializableAccountInfo: toSerializableAccountInfo(accountInfo),
@@ -64,7 +64,7 @@ class RaydiumDEX extends DEX {
         tokenVaultA,
         tokenMintB,
         tokenVaultB,
-        dexLabel: this.label,
+        dexLabel: 'Raydium',
         id: amm.id,
       };
 

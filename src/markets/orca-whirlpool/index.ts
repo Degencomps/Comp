@@ -3,7 +3,7 @@ import { AccountInfo, PublicKey } from '@solana/web3.js';
 import fs from 'fs';
 import { connection } from '../../clients/rpc.js';
 import { logger } from '../../logger.js';
-import { DEX, DexLabel, Market } from '../types.js';
+import { DEX, Market } from '../types.js';
 import { toPairString, toSerializableAccountInfo } from '../utils.js';
 
 // something is wrong with the accounts of these markets
@@ -49,7 +49,7 @@ class OrcaWhirpoolDEX extends DEX {
   pools: WhirlpoolData[];
 
   constructor() {
-    super(DexLabel.ORCA_WHIRLPOOLS);
+    super();
     this.pools = [];
 
     for (let i = 0; i < fetchedPoolData.length; i++) {
@@ -77,7 +77,7 @@ class OrcaWhirpoolDEX extends DEX {
       this.ammCalcAddPoolMessages.push({
         type: 'addPool',
         payload: {
-          poolLabel: this.label,
+          poolLabel: 'Whirlpool',
           id: pool.address.toBase58(),
           feeRateBps: Math.floor(pool.feeRate / 100),
           serializableAccountInfo: toSerializableAccountInfo(
@@ -91,7 +91,7 @@ class OrcaWhirpoolDEX extends DEX {
         tokenVaultA: pool.tokenVaultA.toBase58(),
         tokenMintB: pool.tokenMintB.toBase58(),
         tokenVaultB: pool.tokenVaultB.toBase58(),
-        dexLabel: this.label,
+        dexLabel: 'Whirlpool',
         id: pool.address.toBase58(),
       };
 

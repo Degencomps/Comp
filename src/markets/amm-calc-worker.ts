@@ -2,11 +2,11 @@ import { Amm, ammFactory } from '@jup-ag/core';
 import { AccountInfo, PublicKey } from '@solana/web3.js';
 import { parentPort, workerData } from 'worker_threads';
 import { logger as loggerOrig } from '../logger.js';
+import { JupiterDexProgramLabel } from './jupiter/index.js';
 import {
   AddPoolParamPayload,
   AmmCalcWorkerParamMessage,
   AmmCalcWorkerResultMessage,
-  DexLabel,
 } from './types.js';
 import { toAccountInfo } from './utils.js';
 
@@ -25,7 +25,7 @@ const ammIsInitialized: Map<string, boolean> = new Map();
 const feeForAmm: Map<string, number> = new Map();
 
 function addPool(
-  poolLabel: DexLabel,
+  poolLabel: JupiterDexProgramLabel,
   id: string,
   accountInfo: AccountInfo<Buffer>,
   feeRateBps: number,
