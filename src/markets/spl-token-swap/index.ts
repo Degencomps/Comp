@@ -14,7 +14,6 @@ import { toPairString, toSerializableAccountInfo } from '../utils.js';
 const MARKETS_TO_IGNORE = [];
 
 export const SPL_TOKEN_SWAP_DEXES: JupiterDexProgramLabel[] = [
-  'Bonkswap',
   'Orca V1',
   'Orca V2',
   'Token Swap',
@@ -38,7 +37,11 @@ class SplTokenSwapDEX extends DEX {
       const { amm, accountInfo } = tryMakeAmm<SplTokenSwapAmm>(pool) ?? {};
 
       if (!amm || !accountInfo) {
-        logger.warn({ pool }, 'Failed to make AMM for SPL Token Swap pool');
+        logger.warn('Failed to make AMM for SPL Token Swap pool', {
+          id: pool.pubkey,
+          owner: pool.owner,
+          dexLabel,
+        });
         continue;
       }
 

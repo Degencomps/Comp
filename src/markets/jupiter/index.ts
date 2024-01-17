@@ -1,8 +1,8 @@
 import { Amm, ammFactory } from '@jup-ag/core';
 import { AccountInfo, PublicKey } from '@solana/web3.js';
 import fs from 'fs';
+import { logger } from '../../logger.js';
 import programs from './mainnet-programs.js';
-import { logger } from "../../logger.js";
 
 // make a type that's the values of the mainnet-programs.json
 export const JupiterDexProgramMap = programs;
@@ -58,7 +58,7 @@ export function tryMakeAmm<T extends Amm>(
 
     return { amm, accountInfo };
   } catch (e) {
-    logger.warn(e, 'Failed to make AMM')
+    logger.warn(e, 'Failed to make AMM');
   }
 
   return null;
