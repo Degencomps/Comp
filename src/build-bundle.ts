@@ -428,6 +428,8 @@ async function* buildBundle(
   //     },
   //   };
   // }
+
+  yield
 }
 
 export { buildBundle };

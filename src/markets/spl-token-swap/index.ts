@@ -38,9 +38,7 @@ class SplTokenSwapDEX extends DEX {
       const { amm, accountInfo } = tryMakeAmm<SplTokenSwapAmm>(pool) ?? {};
 
       if (!amm || !accountInfo) {
-        logger.warn('Failed to make AMM for SPL Token Swap pool', {
-          pool,
-        });
+        logger.warn({ pool }, 'Failed to make AMM for SPL Token Swap pool');
         continue;
       }
 

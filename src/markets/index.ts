@@ -12,7 +12,7 @@ import { MintMarketGraph } from './market-graph.js';
 import { OrcaWhirpoolDEX } from './orca-whirlpool/index.js';
 import { RaydiumClmmDEX } from './raydium-clmm/index.js';
 import { RaydiumDEX } from './raydium/index.js';
-import { SplTokenSwapDEX } from './spl-token-swap/index.js';
+// import { SplTokenSwapDEX } from './spl-token-swap/index.js';
 import {
   AmmCalcWorkerParamMessage,
   AmmCalcWorkerResultMessage,
@@ -37,7 +37,7 @@ await ammCalcWorkerPool.initialize();
 logger.info('Initialized AMM calc worker pool');
 
 const dexs: DEX[] = [
-  new SplTokenSwapDEX(),
+  // new SplTokenSwapDEX(),
   new OrcaWhirpoolDEX(),
   new RaydiumDEX(),
   new RaydiumClmmDEX(),

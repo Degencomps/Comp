@@ -5,15 +5,17 @@ import { Timings } from './types.js';
 import { searcher } from 'jito-ts';
 import { searcherClients } from './clients/jito.js';
 import { JupiterDexProgramLabelMap } from './markets/jupiter/index.js';
-import { SPL_TOKEN_SWAP_DEXES } from './markets/spl-token-swap/index.js';
+// import { SPL_TOKEN_SWAP_DEXES } from './markets/spl-token-swap/index.js';
 import { fuseGenerators } from './utils.js';
 
 const PROGRAMS_OF_INTEREST = [
   JupiterDexProgramLabelMap.Raydium,
   JupiterDexProgramLabelMap['Raydium CLMM'],
   JupiterDexProgramLabelMap.Whirlpool,
-  ...SPL_TOKEN_SWAP_DEXES.map((x) => JupiterDexProgramLabelMap[x]),
+  // ...SPL_TOKEN_SWAP_DEXES.map((x) => JupiterDexProgramLabelMap[x]),
 ].map((m) => new PublicKey(m));
+
+logger.debug({ PROGRAMS_OF_INTEREST }, 'programs of interest');
 
 type MempoolUpdate = {
   txns: VersionedTransaction[];
