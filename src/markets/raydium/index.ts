@@ -33,7 +33,7 @@ class RaydiumDEX extends DEX {
       const { amm, accountInfo } = tryMakeAmm<RaydiumAmm>(pool) ?? {};
 
       if (!amm || !accountInfo) {
-        logger.warn('Failed to make AMM for Raydium pool', { id: pool.pubkey });
+        logger.warn({ id: pool.pubkey }, 'Failed to make AMM for Raydium pool');
         continue;
       }
 
