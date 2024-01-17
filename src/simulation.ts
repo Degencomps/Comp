@@ -8,7 +8,7 @@ import { FilteredTransaction } from './pre-simulation-filter.js';
 import { Timings } from './types.js';
 
 // drop slow sims - usually a sign of high load
-const MAX_SIMULATION_AGE_MS = 200;
+const MAX_SIMULATION_AGE_MS = 20000; // TODO: change this back to 200
 const MAX_PENDING_SIMULATIONS = 1000;
 const RECEIVED_SIMULATION_RESULT_EVENT = 'receivedSimulationResult';
 

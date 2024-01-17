@@ -122,15 +122,7 @@ for (const dex of dexs) {
       tokenAccountsOfInterest.set(market.tokenVaultA, market);
       tokenAccountsOfInterest.set(market.tokenVaultB, market);
 
-      logger.debug(
-        { market }, "Adding market"
-      )
-
       marketGraph.addMarket(market.tokenMintA, market.tokenMintB, market);
-    } else {
-      logger.debug(
-        { market }, "Skipping market"
-      );
     }
   }
 }

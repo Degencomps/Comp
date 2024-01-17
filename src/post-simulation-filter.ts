@@ -60,6 +60,12 @@ async function* postSimulateFilter(
     accountsOfInterest,
     timings,
   } of simulationsIteratorGreedy) {
+    logger.debug({ response }, "response")
+
+    if (response.value.transactionResults.length === 0) {
+      continue;
+    }
+
     const txnSimulationResult = response.value.transactionResults[0];
 
     if (txnSimulationResult.err !== null) {
