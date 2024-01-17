@@ -47,6 +47,12 @@ function unpackTokenAccount(
   return tokenAccountInfo;
 }
 
+const recentTransactions = new Set<string>();
+
+setInterval(() => {
+  recentTransactions.clear();
+}, 1000 * 1).unref();
+
 async function* postSimulateFilter(
   simulationsIterator: AsyncGenerator<SimulationResult>,
 ): AsyncGenerator<BackrunnableTrade> {
@@ -148,6 +154,15 @@ async function* postSimulateFilter(
       if (didNotChangeVaults || addOrRemoveLiq) {
         continue;
       }
+
+      const duplicateTransactionString = txn.message.staticAccountKeys[0].toBase58() + market.id + tokenADiff.toString() + tokenBDiff.toString();
+
+      if (recentTransactions.has(duplicateTransactionString)) {
+        logger.debug('dropped duplicate: ' + duplicateTransactionString)
+        continue
+      }
+
+      recentTransactions.add(duplicateTransactionString);
 
       const priceBefore = Number(preSimTokenAccountVaultB.amount * 1000000000n / preSimTokenAccountVaultA.amount) / 1000000000;
       const priceAfter = Number(postSimTokenAccountVaultB.amount * 1000000000n / postSimTokenAccountVaultA.amount) / 1000000000;
