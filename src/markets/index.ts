@@ -55,6 +55,8 @@ for (const dex of dexs) {
       market.tokenMintB == BASE_MINTS_OF_INTEREST_B58.USDC ||
       market.tokenMintB == BASE_MINTS_OF_INTEREST_B58.SOL;
 
+    // TODO: add filter for mints we're NOT interested in
+
     if (isMarketOfInterest) {
       tokenAccountsOfInterest.set(market.tokenVaultA, market);
       tokenAccountsOfInterest.set(market.tokenVaultB, market);

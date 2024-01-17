@@ -13,7 +13,7 @@ import { toPairString, toSerializableAccountInfo } from '../utils.js';
 // something is wrong with the accounts of these markets
 const MARKETS_TO_IGNORE = [];
 
-const SPL_TOKEN_SWAP_DEXES: JupiterDexProgramLabel[] = [
+export const SPL_TOKEN_SWAP_DEXES: JupiterDexProgramLabel[] = [
   'Bonkswap',
   'Orca V1',
   'Orca V2',

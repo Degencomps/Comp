@@ -4,15 +4,16 @@ import { Timings } from './types.js';
 //import { SearcherClient } from 'jito-ts/dist/sdk/block-engine/searcher.js';
 import { searcher } from 'jito-ts';
 import { searcherClients } from './clients/jito.js';
+import { JupiterDexProgramLabelMap } from './markets/jupiter/index.js';
+import { SPL_TOKEN_SWAP_DEXES } from './markets/spl-token-swap/index.js';
 import { fuseGenerators } from './utils.js';
 
 const PROGRAMS_OF_INTEREST = [
-  new PublicKey('675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8'), // Raydium
-  new PublicKey('whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc'), // Orca Whirlpools
-  new PublicKey('CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK'), // Raydium CLMM
-  new PublicKey('9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP'), // Orca V2
-  new PublicKey('DjVE6JNiYqPL2QXyCUUh8rNjHrbz9hXHNYt99MQ59qw1'), // Orca
-];
+  JupiterDexProgramLabelMap.Raydium,
+  JupiterDexProgramLabelMap['Raydium CLMM'],
+  JupiterDexProgramLabelMap.Whirlpool,
+  ...SPL_TOKEN_SWAP_DEXES.map((x) => JupiterDexProgramLabelMap[x]),
+].map((m) => new PublicKey(m));
 
 type MempoolUpdate = {
   txns: VersionedTransaction[];
