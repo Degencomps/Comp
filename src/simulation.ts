@@ -36,7 +36,7 @@ async function sendSimulations(
     if (pendingSimulations > MAX_PENDING_SIMULATIONS) {
       logger.warn(
         'dropping txn due to high pending simulation count: ' +
-          pendingSimulations,
+        pendingSimulations,
       );
       continue;
     }
@@ -52,6 +52,8 @@ async function sendSimulations(
         { addresses: accountsOfInterest, encoding: 'base64' },
       ],
       simulationBank: 'tip',
+      replaceRecentBlockhash: true,
+      skipSigVerify: true
     });
     pendingSimulations += 1;
     sim
@@ -66,7 +68,7 @@ async function sendSimulations(
         eventEmitter.emit(RECEIVED_SIMULATION_RESULT_EVENT);
       })
       .catch((e) => {
-        logger.error(e);
+        logger.error(e.message);
         simulationResults.push({
           txn,
           response: null,

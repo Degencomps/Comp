@@ -32,34 +32,46 @@ function addPool(
   params?: any,
 ) {
   logger.trace(`Adding pool ${id} with label ${poolLabel}`);
-  const amm = ammFactory(new PublicKey(id), accountInfo, params);
-  pools.set(id, amm);
-  const accountsForUpdateWithDuplicates = amm
-    .getAccountsForUpdate()
-    .map((a) => a.toBase58());
-  const accountsForUpdate = Array.from(
-    new Set(accountsForUpdateWithDuplicates),
-  );
-  const needsAccounts = accountsForUpdate.length > 0;
-  ammIsInitialized.set(id, !needsAccounts);
-  accountsForUpdateForPool.set(id, accountsForUpdate);
-  accountsForUpdate.forEach((a) => {
-    const amms = ammsForAccount.get(a) || [];
-    amms.push(id);
-    ammsForAccount.set(a, amms);
-  });
 
-  feeForAmm.set(id, feeRateBps);
-
-  const message: AmmCalcWorkerResultMessage = {
+  const response: AmmCalcWorkerResultMessage = {
     type: 'addPool',
     payload: {
       id,
-      accountsForUpdate,
+      success: false,
+      accountsForUpdate: []
     },
   };
 
-  parentPort!.postMessage(message);
+  try {
+    if (poolLabel !== 'Raydium CLMM') {
+      const amm = ammFactory(new PublicKey(id), accountInfo, params);
+      pools.set(id, amm);
+
+      const accountsForUpdateWithDuplicates = amm
+        .getAccountsForUpdate()
+        .map((a) => a.toBase58());
+      const accountsForUpdate = Array.from(
+        new Set(accountsForUpdateWithDuplicates),
+      );
+      const needsAccounts = accountsForUpdate.length > 0;
+      ammIsInitialized.set(id, !needsAccounts);
+      accountsForUpdateForPool.set(id, accountsForUpdate);
+      accountsForUpdate.forEach((a) => {
+        const amms = ammsForAccount.get(a) || [];
+        amms.push(id);
+        ammsForAccount.set(a, amms);
+      });
+
+      response.payload.accountsForUpdate = accountsForUpdate;
+      response.payload.success = true;
+    }
+
+    feeForAmm.set(id, feeRateBps);
+  } catch (e) {
+    logger.error(`Failed to add pool ${poolLabel} ${id}`);
+  }
+
+  parentPort!.postMessage(response);
 }
 
 // async function calculateRoute(route: SerializableRoute) {

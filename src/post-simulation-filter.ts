@@ -14,6 +14,7 @@ import { Timings } from './types.js';
 import { dropBeyondHighWaterMark } from './utils.js';
 
 const HIGH_WATER_MARK = 100;
+const MIN_PRICE_IMPACT_PCT_FILTER = 0.1;
 
 enum TradeDirection {
   SOLD_BASE = 'SOLD_BASE',
@@ -27,6 +28,7 @@ type BackrunnableTrade = {
   tradeDirection: TradeDirection;
   tradeSizeA: bigint;
   tradeSizeB: bigint;
+  priceImpactPct: number,
   timings: Timings;
 };
 
@@ -60,7 +62,7 @@ async function* postSimulateFilter(
     accountsOfInterest,
     timings,
   } of simulationsIteratorGreedy) {
-    logger.debug({ response }, "response")
+    logger.trace({ response }, "response")
 
     if (response.value.transactionResults.length === 0) {
       continue;
@@ -147,13 +149,16 @@ async function* postSimulateFilter(
         continue;
       }
 
+      const priceBefore = Number(preSimTokenAccountVaultA.amount * 100n / preSimTokenAccountVaultB.amount) / 100;
+      const priceAfter = Number(postSimTokenAccountVaultA.amount * 100n / postSimTokenAccountVaultB.amount) / 100;
+      const priceImpactPct = Math.abs((priceAfter - priceBefore)) / priceBefore * 100;
+
+      if (priceImpactPct < MIN_PRICE_IMPACT_PCT_FILTER) continue;
+
       logger.debug(
-        `${market.dexLabel} ${bs58.encode(txn.signatures[0])} \n${
-          market.tokenMintA
-        } ${postSimTokenAccountVaultA.amount} - ${
-          preSimTokenAccountVaultA.amount
-        } = ${tokenADiff} \n${market.tokenMintB} ${
-          postSimTokenAccountVaultB.amount
+        `${market.dexLabel} ${bs58.encode(txn.signatures[0])} \n${market.tokenMintA
+        } ${postSimTokenAccountVaultA.amount} - ${preSimTokenAccountVaultA.amount
+        } = ${tokenADiff} \n${market.tokenMintB} ${postSimTokenAccountVaultB.amount
         } - ${preSimTokenAccountVaultB.amount} = ${tokenBDiff}`,
       );
 
@@ -168,6 +173,7 @@ async function* postSimulateFilter(
           : TradeDirection.SOLD_BASE,
         tradeSizeA: tokenADiffAbs,
         tradeSizeB: tokenBDiffAbs,
+        priceImpactPct,
         timings: {
           mempoolEnd: timings.mempoolEnd,
           preSimEnd: timings.preSimEnd,

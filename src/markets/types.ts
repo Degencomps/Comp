@@ -58,6 +58,7 @@ export type AddPoolParamPayload = {
 
 export type AddPoolResultPayload = {
   id: string;
+  success: boolean;
   accountsForUpdate: string[];
 };
 
@@ -82,31 +83,31 @@ export type CalculateRouteResultPayload = {
 
 export type AmmCalcWorkerParamMessage =
   | {
-      type: 'addPool';
-      payload: AddPoolParamPayload;
-    }
+    type: 'addPool';
+    payload: AddPoolParamPayload;
+  }
   | {
-      type: 'calculateQuote';
-      payload: CalculateQuoteParamPayload;
-    }
+    type: 'calculateQuote';
+    payload: CalculateQuoteParamPayload;
+  }
   | {
-      type: 'calculateRoute';
-      payload: CalculateRouteParamPayload;
-    };
+    type: 'calculateRoute';
+    payload: CalculateRouteParamPayload;
+  };
 
 export type AmmCalcWorkerResultMessage =
   | {
-      type: 'addPool';
-      payload: AddPoolResultPayload;
-    }
+    type: 'addPool';
+    payload: AddPoolResultPayload;
+  }
   | {
-      type: 'calculateQuote';
-      payload: CalculateQuoteResultPayload;
-    }
+    type: 'calculateQuote';
+    payload: CalculateQuoteResultPayload;
+  }
   | {
-      type: 'calculateRoute';
-      payload: CalculateRouteResultPayload;
-    };
+    type: 'calculateRoute';
+    payload: CalculateRouteResultPayload;
+  };
 
 export type SerializableAccountInfo = {
   executable: boolean;
