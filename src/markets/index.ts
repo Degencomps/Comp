@@ -24,6 +24,7 @@ import {
   SerializableRoute,
 } from './types.js';
 import { toJupiterQuote, toSerializableQuoteParams } from './utils.js';
+import fs from "fs";
 
 const JSBI = defaultImport(jsbi);
 
@@ -43,6 +44,14 @@ const dexs: DEX[] = [
   new RaydiumClmmDEX(),
 ];
 
+// we prefilter tokens of interest
+// token has at least a direct swap against USDC or SOL
+// token has at least another swap in the markets - currently raydium, raydium clmm, whirlpool
+export const TOKENS_OF_INTEREST = JSON.parse(
+  fs.readFileSync('./src/markets/tradable_tokens.json', 'utf-8'),
+) as string[];
+
+
 // both vaults of all markets where one side of the market is USDC or SOL
 const tokenAccountsOfInterest = new Map<string, Market>();
 const marketGraph = new MintMarketGraph();
@@ -55,9 +64,12 @@ for (const dex of dexs) {
       market.tokenMintB == BASE_MINTS_OF_INTEREST_B58.USDC ||
       market.tokenMintB == BASE_MINTS_OF_INTEREST_B58.SOL;
 
-    // TODO: add filter for mints we're NOT interested in
+    // filter tokens of interest
+    const isTokenOfInterest =
+      TOKENS_OF_INTEREST.includes(market.tokenMintA) ||
+      TOKENS_OF_INTEREST.includes(market.tokenMintB);
 
-    if (isMarketOfInterest) {
+    if (isMarketOfInterest && isTokenOfInterest) {
       tokenAccountsOfInterest.set(market.tokenVaultA, market);
       tokenAccountsOfInterest.set(market.tokenVaultB, market);
 
