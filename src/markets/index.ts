@@ -24,7 +24,6 @@ import {
   SerializableRoute,
 } from './types.js';
 import { toJupiterQuote, toSerializableQuoteParams } from './utils.js';
-import fs from "fs";
 
 const JSBI = defaultImport(jsbi);
 
@@ -44,17 +43,67 @@ const dexs: DEX[] = [
   new RaydiumClmmDEX(),
 ];
 
-// we prefilter tokens of interest
-// token has at least a direct swap against USDC or SOL
-// token has at least another swap in the markets - currently raydium, raydium clmm, whirlpool
-export const TOKENS_OF_INTEREST = JSON.parse(
-  fs.readFileSync('./src/markets/tradable_tokens.json', 'utf-8'),
-) as string[];
-
-
 // both vaults of all markets where one side of the market is USDC or SOL
 const tokenAccountsOfInterest = new Map<string, Market>();
 const marketGraph = new MintMarketGraph();
+
+// dynamically get tokens of interest
+// token has at least a direct swap against USDC or SOL
+// token has at least another swap in the markets
+const tokensOfInterestMap = new Map<string, {
+  usdc: boolean,
+  sol: boolean,
+  other: boolean,
+}>();
+
+for (const dex of dexs) {
+  for (const market of dex.getAllMarkets()) {
+    if (market.tokenMintA == BASE_MINTS_OF_INTEREST_B58.USDC) {
+      tokensOfInterestMap.set(market.tokenMintB, {
+        ...tokensOfInterestMap.get(market.tokenMintB),
+        usdc: true,
+      });
+      continue
+    }
+    if (market.tokenMintB == BASE_MINTS_OF_INTEREST_B58.USDC) {
+      tokensOfInterestMap.set(market.tokenMintA, {
+        ...tokensOfInterestMap.get(market.tokenMintA),
+        usdc: true,
+      });
+      continue
+    }
+    if (market.tokenMintA == BASE_MINTS_OF_INTEREST_B58.SOL) {
+      tokensOfInterestMap.set(market.tokenMintB, {
+        ...tokensOfInterestMap.get(market.tokenMintB),
+        sol: true,
+      });
+      continue
+    }
+    if (market.tokenMintB == BASE_MINTS_OF_INTEREST_B58.SOL) {
+      tokensOfInterestMap.set(market.tokenMintA, {
+        ...tokensOfInterestMap.get(market.tokenMintA),
+        sol: true,
+      });
+      continue
+    }
+    tokensOfInterestMap.set(market.tokenMintA, {
+      ...tokensOfInterestMap.get(market.tokenMintA),
+      other: true,
+    });
+    tokensOfInterestMap.set(market.tokenMintB, {
+      ...tokensOfInterestMap.get(market.tokenMintB),
+      other: true,
+    });
+  }
+}
+
+// filter map key and put in array
+const tokensOfInterest = Array.from(tokensOfInterestMap.keys()).filter((key) => {
+  const value = tokensOfInterestMap.get(key);
+  return (value.usdc && value.sol) || ((value.usdc || value.sol) && value.other);
+})
+
+logger.debug("Number of tokens of interest: " + tokensOfInterest.length)
 
 for (const dex of dexs) {
   for (const market of dex.getAllMarkets()) {
@@ -66,14 +115,22 @@ for (const dex of dexs) {
 
     // filter tokens of interest
     const isTokenOfInterest =
-      TOKENS_OF_INTEREST.includes(market.tokenMintA) ||
-      TOKENS_OF_INTEREST.includes(market.tokenMintB);
+      tokensOfInterest.includes(market.tokenMintA) ||
+      tokensOfInterest.includes(market.tokenMintB);
 
     if (isMarketOfInterest && isTokenOfInterest) {
       tokenAccountsOfInterest.set(market.tokenVaultA, market);
       tokenAccountsOfInterest.set(market.tokenVaultB, market);
 
+      logger.debug(
+        { market }, "Adding market"
+      )
+
       marketGraph.addMarket(market.tokenMintA, market.tokenMintB, market);
+    } else {
+      logger.debug(
+        { market }, "Skipping market"
+      );
     }
   }
 }
