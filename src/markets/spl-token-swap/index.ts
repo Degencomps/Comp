@@ -79,6 +79,14 @@ class SplTokenSwapDEX extends DEX {
       }
     }
   }
+
+  // static calculateQuote(
+  //   market: Market,
+  //   amount: number,
+  //   direction: 'AtoB' | 'BtoA',
+  // ): number {
+  //   return 0;
+  // }
 }
 
 export { SplTokenSwapDEX };

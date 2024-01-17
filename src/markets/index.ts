@@ -14,6 +14,7 @@ import { RaydiumClmmDEX } from './raydium-clmm/index.js';
 import { RaydiumDEX } from './raydium/index.js';
 import { SplTokenSwapDEX } from './spl-token-swap/index.js';
 import {
+  AddPoolResultPayload,
   AmmCalcWorkerParamMessage,
   AmmCalcWorkerResultMessage,
   CalculateQuoteResultPayload,
@@ -42,6 +43,22 @@ const dexs: DEX[] = [
   new RaydiumDEX(),
   new RaydiumClmmDEX(),
 ];
+
+for (const dex of dexs) {
+  for (const addPoolMessage of dex.getAmmCalcAddPoolMessages()) {
+    const results = ammCalcWorkerPool.runTaskOnAllWorkers<
+      AmmCalcWorkerParamMessage,
+      AmmCalcWorkerResultMessage
+    >(addPoolMessage);
+    Promise.race(results).then((result) => {
+      if (result.type !== 'addPool') {
+        throw new Error('Unexpected result type in addPool response');
+      }
+      const payload = result.payload as AddPoolResultPayload;
+      return payload.accountsForUpdate;
+    });
+  }
+}
 
 // both vaults of all markets where one side of the market is USDC or SOL
 const tokenAccountsOfInterest = new Map<string, Market>();
