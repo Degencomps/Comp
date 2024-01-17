@@ -8,7 +8,7 @@ import { FilteredTransaction } from './pre-simulation-filter.js';
 import { Timings } from './types.js';
 
 // drop slow sims - usually a sign of high load
-const MAX_SIMULATION_AGE_MS = 20000; // TODO: change this back to 200
+const MAX_SIMULATION_AGE_MS = 200; // TODO: change this back to 200
 const MAX_PENDING_SIMULATIONS = 1000;
 const RECEIVED_SIMULATION_RESULT_EVENT = 'receivedSimulationResult';
 
@@ -64,17 +64,20 @@ async function sendSimulations(
           accountsOfInterest,
           timings,
         });
-        pendingSimulations -= 1;
-        eventEmitter.emit(RECEIVED_SIMULATION_RESULT_EVENT);
       })
       .catch((e) => {
-        logger.error(e.message);
+        // ignore the too many account locks error
+        if (!(e.message as string).includes('TooManyAccountLocks')) {
+          logger.error(e.message);
+        }
         simulationResults.push({
           txn,
           response: null,
           accountsOfInterest,
           timings,
         });
+
+      }).finally(() => {
         pendingSimulations -= 1;
         eventEmitter.emit(RECEIVED_SIMULATION_RESULT_EVENT);
       });

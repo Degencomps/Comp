@@ -23,7 +23,11 @@ const backrunnableTrades = postSimulateFilter(simulations);
 
 
 for await (const backrunnableTrade of backrunnableTrades) {
-  logger.info(`backrunnableTrade ${bs58.encode(backrunnableTrade.txn.signatures[0]).slice(0, 4)}... on ${backrunnableTrade.market.dexLabel} for ${backrunnableTrade.market.tokenMintA.slice(0, 4)}.../${backrunnableTrade.market.tokenMintB.slice(0, 4)}... ${backrunnableTrade.tradeSizeA}/${backrunnableTrade.tradeSizeB} by ${backrunnableTrade.txn.message.staticAccountKeys[0].toBase58()} with ${backrunnableTrade.priceImpactPct.toFixed(3)}% price impact`);
+  logger.info(`backrunnableTrade ${bs58.encode(backrunnableTrade.txn.signatures[0]).slice(0, 4)}... \
+on ${backrunnableTrade.market.dexLabel} for ${backrunnableTrade.market.tokenMintA.slice(0, 4)}.../${backrunnableTrade.market.tokenMintB.slice(0, 4)}... \
+${backrunnableTrade.tradeSizeA}/${backrunnableTrade.tradeSizeB} by ${backrunnableTrade.txn.message.staticAccountKeys[0].toBase58()} \
+with ${backrunnableTrade.priceImpactPct.toFixed(3)}% price impact \
+in ${backrunnableTrade.timings.postSimEnd - backrunnableTrade.timings.mempoolEnd}ms`);
 }
 
 // find potential arb opportunities

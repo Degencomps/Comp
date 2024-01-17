@@ -149,9 +149,13 @@ async function* postSimulateFilter(
         continue;
       }
 
-      const priceBefore = Number(preSimTokenAccountVaultA.amount * 100n / preSimTokenAccountVaultB.amount) / 100;
-      const priceAfter = Number(postSimTokenAccountVaultA.amount * 100n / postSimTokenAccountVaultB.amount) / 100;
+      const priceBefore = Number(preSimTokenAccountVaultB.amount * 1000000000n / preSimTokenAccountVaultA.amount) / 1000000000;
+      const priceAfter = Number(postSimTokenAccountVaultB.amount * 1000000000n / postSimTokenAccountVaultA.amount) / 1000000000;
       const priceImpactPct = Math.abs((priceAfter - priceBefore)) / priceBefore * 100;
+
+      if (isNaN(priceImpactPct)) {
+        console.log(priceAfter, priceBefore, preSimTokenAccountVaultA.amount, preSimTokenAccountVaultB.amount, postSimTokenAccountVaultA.amount, postSimTokenAccountVaultB.amount)
+      }
 
       if (priceImpactPct < MIN_PRICE_IMPACT_PCT_FILTER) continue;
 
