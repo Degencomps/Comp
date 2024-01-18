@@ -158,7 +158,7 @@ async function* postSimulateFilter(
       const duplicateTransactionString = txn.message.staticAccountKeys[0].toBase58() + market.id + tokenADiff.toString() + tokenBDiff.toString();
 
       if (recentTransactions.has(duplicateTransactionString)) {
-        logger.debug('dropped duplicate: ' + duplicateTransactionString)
+        logger.trace('dropped duplicate: ' + duplicateTransactionString)
         continue
       }
 
@@ -168,11 +168,7 @@ async function* postSimulateFilter(
       const priceAfter = Number(postSimTokenAccountVaultB.amount * 1000000000n / postSimTokenAccountVaultA.amount) / 1000000000;
       const priceImpactPct = Math.abs((priceAfter - priceBefore)) / priceBefore * 100;
 
-      if (isNaN(priceImpactPct)) {
-        console.log(priceAfter, priceBefore, preSimTokenAccountVaultA.amount, preSimTokenAccountVaultB.amount, postSimTokenAccountVaultA.amount, postSimTokenAccountVaultB.amount)
-      }
-
-      if (priceImpactPct < MIN_PRICE_IMPACT_PCT_FILTER) continue;
+      if (isNaN(priceImpactPct) || priceImpactPct < MIN_PRICE_IMPACT_PCT_FILTER) continue;
 
       logger.debug(
         `${market.dexLabel} ${bs58.encode(txn.signatures[0])} \n${market.tokenMintA

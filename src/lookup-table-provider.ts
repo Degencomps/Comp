@@ -56,9 +56,10 @@ class LookupTableProvider {
 
   async getLookupTable(
     lutAddress: PublicKey,
+    refresh = false
   ): Promise<AddressLookupTableAccount | null> {
     const lutAddressStr = lutAddress.toBase58();
-    if (this.lookupTables.has(lutAddressStr)) {
+    if (!refresh && this.lookupTables.has(lutAddressStr)) {
       return this.lookupTables.get(lutAddressStr)!;
     }
 
@@ -134,12 +135,9 @@ class LookupTableProvider {
     }
 
     logger.info(
-      `Reduced ${addressSet.size} different addresses to ${
-        selectedTables.length
-      } lookup tables from ${sortedIntersectionArray.length} (${
-        this.lookupTables.size
-      }) candidates, with ${
-        addressSet.size - numAddressesTakenCareOf
+      `Reduced ${addressSet.size} different addresses to ${selectedTables.length
+      } lookup tables from ${sortedIntersectionArray.length} (${this.lookupTables.size
+      }) candidates, with ${addressSet.size - numAddressesTakenCareOf
       } missing addresses in ${Date.now() - startCalc}ms.`,
     );
 

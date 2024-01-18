@@ -1,6 +1,6 @@
 import { ICompare, PriorityQueue } from '@datastructures-js/priority-queue';
-import { logger } from './logger.js';
 import { Queue } from '@datastructures-js/queue';
+import { logger } from './logger.js';
 
 class AsyncQueue<T> {
   private readonly _queue: Queue<T> = new Queue();
@@ -29,6 +29,11 @@ class AsyncQueue<T> {
 
   length(): number {
     return this._queue.size();
+  }
+
+  clear() {
+    this._queue.clear();
+    this._waitingResolvers.clear();
   }
 }
 
@@ -78,10 +83,37 @@ async function* dropBeyondHighWaterMark<T>(
       if (queue.length() < highWaterMark) {
         queue.put(item);
       } else {
-        logger.warn(
+        logger.debug(
           `HighWaterMark of ${highWaterMark} reached. Dropping ${name}`,
         );
       }
+    }
+  }
+
+  consume();
+
+  while (true) {
+    const item = await queue.get();
+    yield item;
+  }
+}
+
+async function* clearOnHighWaterMark<T>(
+  iterable: AsyncGenerator<T>,
+  highWaterMark: number,
+  name: string,
+): AsyncGenerator<T> {
+  const queue = new AsyncQueue<T>();
+
+  async function consume() {
+    for await (const item of iterable) {
+      if (queue.length() >= highWaterMark) {
+        logger.warn(
+          `HighWaterMark of ${highWaterMark} reached. Clearing ${name}`,
+        );
+        queue.clear()
+      }
+      queue.put(item);
     }
   }
 
@@ -108,7 +140,7 @@ async function* prioritize<T>(
       if (queue.length() < highWaterMark) {
         queue.enqueue(item);
       } else {
-        logger.warn(
+        logger.debug(
           `HighWaterMark of ${highWaterMark} reached in priority queue. Dropping item.`,
         );
       }
@@ -162,9 +194,8 @@ async function* fuseGenerators<T>(
 }
 
 export {
-  dropBeyondHighWaterMark,
-  prioritize,
+  clearOnHighWaterMark, dropBeyondHighWaterMark, fuseGenerators, prioritize,
   shuffle,
-  toDecimalString,
-  fuseGenerators,
+  toDecimalString
 };
+

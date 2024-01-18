@@ -1,7 +1,6 @@
 // import { buildBundle } from './build-bundle.js';
 // import { calculateArb } from './calculate-arb.js';
 import { calculateArb } from "./calculate-arb.js";
-import { logger } from "./logger.js";
 import { mempool } from './mempool.js';
 import { postSimulateFilter } from './post-simulation-filter.js';
 import { preSimulationFilter } from './pre-simulation-filter.js';
@@ -23,8 +22,8 @@ const backrunnableTrades = postSimulateFilter(simulations);
 //find potential arb opportunities
 const arbIdeas = calculateArb(backrunnableTrades);
 
-for await (const idea of arbIdeas) {
-  logger.info(idea.expectedProfit.toString());
+for await (const _idea of arbIdeas) {
+  //logger.info(idea.expectedProfit.toString());
 }
 
 // build the bundle to submit

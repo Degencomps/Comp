@@ -34,7 +34,7 @@ async function sendSimulations(
 ) {
   for await (const { txn, accountsOfInterest, timings } of txnIterator) {
     if (pendingSimulations > MAX_PENDING_SIMULATIONS) {
-      logger.warn(
+      logger.debug(
         'dropping txn due to high pending simulation count: ' +
         pendingSimulations,
       );
@@ -67,7 +67,8 @@ async function sendSimulations(
       })
       .catch((e) => {
         // ignore the too many account locks error
-        if (!(e.message as string).includes('TooManyAccountLocks')) {
+        const message = e.message as string
+        if (!message.includes('TooManyAccountLocks') && !message.includes('AccountLoadedTwice')) {
           logger.error(e.message);
         }
         simulationResults.push({
@@ -103,7 +104,7 @@ async function* simulate(
     const txnAge = Date.now() - timings.mempoolEnd;
 
     if (txnAge > MAX_SIMULATION_AGE_MS) {
-      logger.warn(`dropping slow simulation - age: ${txnAge}ms`);
+      logger.debug(`dropping slow simulation - age: ${txnAge}ms`);
       continue;
     }
 

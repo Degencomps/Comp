@@ -41,7 +41,7 @@ for (const dex of dexs) {
       AmmCalcWorkerParamMessage,
       AmmCalcWorkerResultMessage
     >(addPoolMessage);
-    Promise.race(results).then((result) => {
+    await Promise.race(results).then((result) => {
       if (result.type !== 'addPool') {
         throw new Error('Unexpected result type in addPool response');
       }
@@ -76,13 +76,13 @@ for (const dex of dexs) {
 }
 
 // filter map key and put in set
-const tokensOfInterest = new Set(
+const ignoredTokens = new Set(
   Array.from(tokensOfInterestMap.keys()).filter(
-    (key) => tokensOfInterestMap.get(key) > 1,
+    (key) => tokensOfInterestMap.get(key) <= 1,
   ),
 );
 
-logger.debug('Number of tokens of interest: ' + tokensOfInterest.size);
+logger.info('Number of tokens to ignore: ' + ignoredTokens.size);
 
 for (const dex of dexs) {
   for (const market of dex.getAllMarkets()) {
@@ -93,11 +93,11 @@ for (const dex of dexs) {
       market.tokenMintB == BASE_MINTS_OF_INTEREST_B58.SOL;
 
     // filter tokens of interest
-    const isTokenOfInterest =
-      tokensOfInterest.has(market.tokenMintA) ||
-      tokensOfInterest.has(market.tokenMintB);
+    const isIgnoredToken =
+      ignoredTokens.has(market.tokenMintA) ||
+      ignoredTokens.has(market.tokenMintB);
 
-    if (isMarketOfInterest && isTokenOfInterest) {
+    if (isMarketOfInterest && !isIgnoredToken) {
       tokenAccountsOfInterest.set(market.tokenVaultA, market);
       tokenAccountsOfInterest.set(market.tokenVaultB, market);
 
@@ -144,7 +144,7 @@ function getAll2HopRoutes(
   const cacheKeyReverse = `${destinationMint}-${sourceMint}`;
 
   if (routeCache.has(cacheKey)) {
-    logger.debug(`Cache hit for ${cacheKey}`);
+    logger.trace(`Cache hit for ${cacheKey}`);
     return routeCache.get(cacheKey)!;
   }
   const sourceNeighbours = marketGraph.getNeighbours(sourceMint);

@@ -37,7 +37,7 @@ class SplTokenSwapDEX extends DEX {
       const { amm, accountInfo } = tryMakeAmm<SplTokenSwapAmm>(pool) ?? {};
 
       if (!amm || !accountInfo) {
-        logger.debug(
+        logger.trace(
           {
             id: pool.pubkey,
             owner: pool.owner,

@@ -21,7 +21,7 @@ const JSBI = defaultImport(jsbi);
 
 const ARB_CALCULATION_NUM_STEPS = config.get('arb_calculation_num_steps');
 const MAX_ARB_CALCULATION_TIME_MS = config.get('max_arb_calculation_time_ms');
-const HIGH_WATER_MARK = 5000;
+const HIGH_WATER_MARK = 500;
 
 const USDC_SOL_PRICE = 100;
 // ratio in lamports
@@ -111,7 +111,7 @@ async function* calculateArb(
       continue;
     }
 
-    logger.info(`backrunnableTrade ${bs58.encode(txn.signatures[0]).slice(0, 4)}... \
+    logger.debug(`backrunnableTrade ${bs58.encode(txn.signatures[0]).slice(0, 4)}... \
 on ${originalMarket.dexLabel} for ${originalMarket.tokenMintA.slice(0, 4)}.../${originalMarket.tokenMintB.slice(0, 4)}... \
 ${tradeSizeA}/${tradeSizeB} by ${txn.message.staticAccountKeys[0].toBase58()} \
 with ${priceImpactPct.toFixed(3)}% price impact \
@@ -177,8 +177,7 @@ in ${timings.postSimEnd - timings.mempoolEnd}ms`);
 
     if (quotes === null || quotes.length === 0) continue;
 
-    logger.info(`Found ${quotes.length} potential arbs for ${bs58.encode(txn.signatures[0]).slice(0, 4)}...`);
-
+    logger.debug(`Found ${quotes.length} potential arbs for ${bs58.encode(txn.signatures[0]).slice(0, 4)}...`);
     // find the best quote
     const bestQuote = quotes.reduce((best, current) => {
       const currentQuote = current[1];
@@ -204,13 +203,13 @@ in ${timings.postSimEnd - timings.mempoolEnd}ms`);
 
     const marketsString = bestQuote.quote.routePlan.reduce((acc, r) => {
       return `${acc} -> ${r.swapInfo.label}`;
-    }, '');
+    }, balancingLeg.dex as string);
 
     logger.info(
       `Potential arb: profit ${profitDecimals} ${backrunSourceMintName} on ${originalMarket.dexLabel
       } ::: BUY ${arbSizeDecimals} on ${marketsString} backrunning ${bs58.encode(
         txn.signatures[0],
-      )}`,
+      )} in ${Date.now() - timings.mempoolEnd}ms`,
     );
 
     yield {
