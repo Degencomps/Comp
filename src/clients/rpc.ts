@@ -168,10 +168,10 @@ let connection: Connection;
 
 if (RPC_REQUESTS_PER_SECOND > 0) {
   connection = new Connection(RPC_URL, {
-    commitment: 'processed',
-    fetch: coalesceFetch() as any,
     disableRetryOnRateLimit: true,
     httpAgent: keepaliveAgent,
+    commitment: 'processed',
+    fetch: coalesceFetch() as any,
   });
 } else {
   connection = new Connection(RPC_URL, {

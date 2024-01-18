@@ -18,6 +18,10 @@ import {
 import { toAccountInfo, toSerializableQuote } from './utils.js';
 
 const ARB_CALCULATION_NUM_STEPS = JSBI.BigInt(config.get('arb_calculation_num_steps'));
+const ZERO = JSBI.BigInt(0);
+const TWO = JSBI.BigInt(2);
+const SCALING_FACTOR = JSBI.BigInt(10000);
+const BPS_MULTIPLIER = JSBI.BigInt(10000);
 
 const workerId = workerData.workerId;
 
@@ -83,43 +87,52 @@ function addPool(
 }
 
 async function fetchJupiterQuote(sourceMint: string, destinationMint: string, amountIn: string, excludeDexes: JupiterDexProgramLabel[]) {
-  const quote = await jupiterClient.quoteGet({
-    inputMint: sourceMint,
-    outputMint: destinationMint,
-    amount: parseInt(amountIn),
-    slippageBps: 0,
-    onlyDirectRoutes: true,
-    excludeDexes: ["Perps", ...excludeDexes]
-  })
+  try {
+    const quote = await jupiterClient.quoteGet({
+      inputMint: sourceMint,
+      outputMint: destinationMint,
+      amount: Math.floor(parseFloat(amountIn)),
+      slippageBps: 0,
+      onlyDirectRoutes: true,
+      excludeDexes: ["Perps", ...excludeDexes]
+    })
 
-  return {
-    in: JSBI.BigInt(quote.inAmount),
-    out: JSBI.BigInt(quote.otherAmountThreshold),
-    quote
+    return {
+      in: JSBI.BigInt(quote.inAmount),
+      out: JSBI.BigInt(quote.otherAmountThreshold),
+      quote
+    }
+  } catch (e) {
+    logger.error(e, 'Failed to fetch Jupiter quote')
+
+    return {
+      in: ZERO, out: ZERO
+    }
   }
 }
 
 function calculateFixedLegQuote(input: JsbiType, marketId: string, originalIn: JsbiType, originalOutExcludingFees: JsbiType) {
+  if (JSBI.equal(input, ZERO)) return { in: ZERO, out: ZERO }
+
   const feeRateBps = feeForAmm.get(marketId) * 2;
 
   const originalOutputAfterFees = JSBI.subtract(
     originalOutExcludingFees,
     JSBI.divide(
       JSBI.multiply(originalOutExcludingFees, JSBI.BigInt(feeRateBps)),
-      JSBI.BigInt(10000),
+      BPS_MULTIPLIER,
     ),
   );
 
-  const scalingFactor = JSBI.BigInt(10000);
 
   // Scale the amounts before the calculation
   // If overrideOutputAmount is significantly larger than overrideInputAmount and amount is small,
   // the result of JSBI.multiply(amount, overrideOutputAmount) can be significantly smaller than overrideInputAmount.
-  const scaledInput = JSBI.multiply(input, scalingFactor);
-  const scaledOriginalInput = JSBI.multiply(originalIn, scalingFactor)
+  const scaledInput = JSBI.multiply(input, SCALING_FACTOR);
+  const scaledOriginalInput = JSBI.multiply(originalIn, SCALING_FACTOR)
   const scaledOriginalOutput = JSBI.multiply(
     originalOutputAfterFees,
-    scalingFactor,
+    SCALING_FACTOR,
   );
 
   // Calculate the output for the current input amount based on the same ratio as the override
@@ -129,7 +142,7 @@ function calculateFixedLegQuote(input: JsbiType, marketId: string, originalIn: J
   );
 
   // Scale the result back down after the calculation
-  output = JSBI.divide(output, scalingFactor);
+  output = JSBI.divide(output, SCALING_FACTOR);
 
   return {
     in: input,
@@ -137,21 +150,22 @@ function calculateFixedLegQuote(input: JsbiType, marketId: string, originalIn: J
   }
 }
 
-function calculateSteppedInputs(inputBase: JsbiType, steps: JsbiType) {
+function calculateSteppedInputs(inputBase: JsbiType, steps: JsbiType): JsbiType[] {
   const stepSize = JSBI.divide(inputBase, steps)
   return new Array(steps).map((_, i) => JSBI.add(inputBase, JSBI.multiply(stepSize, JSBI.BigInt(i))));
 }
 
-function calculatedFixedLegQuotes(inputSteps: JsbiType[], balancingLeg: SerializableLegFixed) {
+function calculatedFixedLegQuotes(inputSteps: JsbiType[], balancingLeg: SerializableLegFixed): Omit<Quote, 'quote'>[] {
   return inputSteps
     .map(i => calculateFixedLegQuote(i, balancingLeg.marketId, JSBI.BigInt(balancingLeg.in), JSBI.BigInt(balancingLeg.estimatedOutExcludingFees)))
 }
 
+// TODO: add a min size filter
 async function calculateJupiterQuotes(balancingLeg: SerializableLegFixed, mirroringLeg: SerializableLeg, balancingLegFirst: boolean) {
   const profitableQuotes: Quote[] = [];
 
   if (balancingLegFirst) {
-    const inputBase = JSBI.divide(JSBI.BigInt(balancingLeg.in), JSBI.BigInt(2))
+    const inputBase = JSBI.divide(JSBI.BigInt(balancingLeg.in), TWO)
     const inputSteps = calculateSteppedInputs(inputBase, ARB_CALCULATION_NUM_STEPS);
     const balancingLegQuotes = calculatedFixedLegQuotes(inputSteps, balancingLeg);
     const mirroringLegQuotes = await Promise.all(balancingLegQuotes.map(q => fetchJupiterQuote(mirroringLeg.sourceMint, mirroringLeg.destinationMint, q.out.toString(), [balancingLeg.dex])))
@@ -159,7 +173,7 @@ async function calculateJupiterQuotes(balancingLeg: SerializableLegFixed, mirror
     for (const [i, q] of balancingLegQuotes.entries()) {
       const mirroringLeg = mirroringLegQuotes[i]
       const profit = JSBI.subtract(mirroringLeg.out, q.in)
-      if (JSBI.greaterThan(profit, JSBI.BigInt(0))) {
+      if (JSBI.greaterThan(profit, ZERO)) {
         profitableQuotes.push({
           in: q.in,
           out: mirroringLeg.out,
@@ -168,15 +182,15 @@ async function calculateJupiterQuotes(balancingLeg: SerializableLegFixed, mirror
       }
     }
   } else {
-    const inputBase = JSBI.divide(JSBI.BigInt(balancingLeg.estimatedOutExcludingFees), JSBI.BigInt(2));
+    const inputBase = JSBI.divide(JSBI.BigInt(balancingLeg.estimatedOutExcludingFees), TWO);
     const inputSteps = calculateSteppedInputs(inputBase, ARB_CALCULATION_NUM_STEPS);
     const mirroringLegQuotes = await Promise.all(inputSteps.map(i => fetchJupiterQuote(mirroringLeg.sourceMint, mirroringLeg.destinationMint, i.toString(), [balancingLeg.dex])))
-    const balancingLegQuotes = calculatedFixedLegQuotes(mirroringLegQuotes.map(q => q.out), balancingLeg)
+    const balancingLegQuotes = calculatedFixedLegQuotes(mirroringLegQuotes.map(q => q?.out), balancingLeg)
 
     for (const [i, q] of balancingLegQuotes.entries()) {
       const mirroringLeg = mirroringLegQuotes[i]
       const profit = JSBI.subtract(q.out, mirroringLeg.in)
-      if (JSBI.greaterThan(profit, JSBI.BigInt(0))) {
+      if (JSBI.greaterThan(profit, ZERO)) {
         profitableQuotes.push({
           in: mirroringLeg.in,
           out: q.out,

@@ -80,8 +80,8 @@ async function* calculateArb(
         : tradeBSize;
 
       // our sorting is based on size of trade x impact of trade in SOL terms
-      const tradeAImpact = tradeASizeNormalized * BigInt(tradeA.priceImpactPct * 10000)
-      const tradeBImpact = tradeBSizeNormalized * BigInt(tradeB.priceImpactPct * 10000)
+      const tradeAImpact = tradeASizeNormalized * BigInt(Math.floor(tradeA.priceImpactPct * 10000))
+      const tradeBImpact = tradeBSizeNormalized * BigInt(Math.floor(tradeB.priceImpactPct * 10000))
 
       if (tradeAImpact < tradeBImpact) {
         return 1;
@@ -175,7 +175,9 @@ in ${timings.postSimEnd - timings.mempoolEnd}ms`);
       balancingLegFirst
     }, MAX_ARB_CALCULATION_TIME_MS);
 
-    if (quotes === null) continue;
+    if (quotes === null || quotes.length === 0) continue;
+
+    logger.info(`Found ${quotes.length} potential arbs for ${bs58.encode(txn.signatures[0]).slice(0, 4)}...`);
 
     // find the best quote
     const bestQuote = quotes.reduce((best, current) => {
