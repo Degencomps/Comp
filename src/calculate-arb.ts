@@ -1,3 +1,4 @@
+import { QuoteResponse } from '@jup-ag/api';
 import { VersionedTransaction } from '@solana/web3.js';
 import bs58 from 'bs58';
 import { defaultImport } from 'default-import';
@@ -19,7 +20,6 @@ import { prioritize, toDecimalString } from './utils.js';
 
 const JSBI = defaultImport(jsbi);
 
-const ARB_CALCULATION_NUM_STEPS = config.get('arb_calculation_num_steps');
 const MAX_ARB_CALCULATION_TIME_MS = config.get('max_arb_calculation_time_ms');
 const HIGH_WATER_MARK = 500;
 
@@ -32,9 +32,14 @@ const MAX_TRADE_AGE_MS = 200;
 
 type ArbIdea = {
   txn: VersionedTransaction;
-  arbSize: JsbiType;
   expectedProfit: JsbiType;
-  quote: Quote;
+  trade: {
+    in: JsbiType,
+    out: JsbiType, // can ignore?
+    mirroringLegQuote: QuoteResponse,
+    balancingLeg: SerializableLegFixed,
+    balancingLegFirst: boolean
+  }
   timings: Timings;
 };
 
@@ -124,15 +129,6 @@ in ${timings.postSimEnd - timings.mempoolEnd}ms`);
       (baseIsTokenA ? tradeSizeB : tradeSizeA).toString(),
     );
 
-    // calculate the arb calc step size and init initial arb size to it
-    const stepSize = JSBI.divide(
-      JSBI.divide(tradeSizeBase, JSBI.BigInt(2)), // never do more than 50% of the original trade size
-      JSBI.BigInt(ARB_CALCULATION_NUM_STEPS), // now split it into a few steps
-    );
-
-    // ignore trade if minimum arb size is too small
-    if (JSBI.equal(stepSize, JSBI.BigInt(0))) continue;
-
     // source mint is always usdc or sol
     const backrunSourceMint = baseIsTokenA
       ? originalMarket.tokenMintA
@@ -177,6 +173,8 @@ in ${timings.postSimEnd - timings.mempoolEnd}ms`);
 
     if (quotes === null || quotes.length === 0) continue;
 
+    // TODO: move most of this logic to the worker itself
+
     logger.debug(`Found ${quotes.length} potential arbs for ${bs58.encode(txn.signatures[0]).slice(0, 4)}...`);
     // find the best quote
     const bestQuote = quotes.reduce((best, current) => {
@@ -192,14 +190,13 @@ in ${timings.postSimEnd - timings.mempoolEnd}ms`);
     });
 
     const profit = getProfitForQuote(bestQuote);
-    const arbSize = bestQuote.in;
 
     const sourceIsUsdc = USDC_MINT_STRING === backrunSourceMint;
     const decimals = sourceIsUsdc ? USDC_DECIMALS : SOL_DECIMALS;
     const backrunSourceMintName = sourceIsUsdc ? 'USDC' : 'SOL';
 
     const profitDecimals = toDecimalString(profit.toString(), decimals);
-    const arbSizeDecimals = toDecimalString(arbSize.toString(), decimals);
+    const arbSizeDecimals = toDecimalString(bestQuote.in.toString(), decimals);
 
     const marketsString = bestQuote.quote.routePlan.reduce((acc, r) => {
       return `${acc} -> ${r.swapInfo.label}`;
@@ -214,9 +211,14 @@ in ${timings.postSimEnd - timings.mempoolEnd}ms`);
 
     yield {
       txn,
-      arbSize,
       expectedProfit: profit,
-      quote: bestQuote,
+      trade: {
+        in: bestQuote.in,
+        out: bestQuote.out,
+        mirroringLegQuote: bestQuote.quote,
+        balancingLeg,
+        balancingLegFirst
+      },
       timings: {
         mempoolEnd: timings.mempoolEnd,
         preSimEnd: timings.preSimEnd,

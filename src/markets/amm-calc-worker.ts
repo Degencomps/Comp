@@ -214,6 +214,11 @@ async function calculateJupiterQuotes(balancingLeg: SerializableLegFixed, mirror
     logger.error(e, 'Failed to calculate quotes')
   }
 
+  // TODO:
+  // get the most profitable quote only
+  // filter out trades that are too small
+  // build and sign a bundle for that quote
+
   const response: AmmCalcWorkerResultMessage = {
     type: 'calculateJupiterQuotes',
     payload: {
