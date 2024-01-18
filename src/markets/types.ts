@@ -1,4 +1,4 @@
-import { SwapLegType } from '@jup-ag/core/dist/lib/jupiterEnums.js';
+import { QuoteResponse } from '@jup-ag/api';
 import { AccountInfo } from '@solana/web3.js';
 import { BASE_MINTS_OF_INTEREST } from '../constants.js';
 import { JsbiType } from '../types.js';
@@ -73,13 +73,15 @@ export type CalculateQuoteResultPayload = {
   error?: any;
 };
 
-export type CalculateRouteParamPayload = {
-  route: SerializableRoute;
+export type CalculateJupiterQuotesParamPayload = {
+  balancingLeg: SerializableLegFixed;
+  mirroringLeg: SerializableLeg;
+  balancingLegFirst: boolean;
 };
 
-export type CalculateRouteResultPayload = {
-  quote: SerializableQuote;
-};
+export type CalculateJupiterQuotesResultPayload = {
+  quotes: SerializableQuote[]
+}
 
 export type AmmCalcWorkerParamMessage =
   | {
@@ -91,8 +93,8 @@ export type AmmCalcWorkerParamMessage =
     payload: CalculateQuoteParamPayload;
   }
   | {
-    type: 'calculateRoute';
-    payload: CalculateRouteParamPayload;
+    type: 'calculateJupiterQuotes',
+    payload: CalculateJupiterQuotesParamPayload;
   };
 
 export type AmmCalcWorkerResultMessage =
@@ -105,8 +107,8 @@ export type AmmCalcWorkerResultMessage =
     payload: CalculateQuoteResultPayload;
   }
   | {
-    type: 'calculateRoute';
-    payload: CalculateRouteResultPayload;
+    type: 'calculateJupiterQuotes',
+    payload: CalculateJupiterQuotesResultPayload;
   };
 
 export type SerializableAccountInfo = {
@@ -129,52 +131,28 @@ export type SerializableJupiterQuote = {
   priceImpactPct: number;
 };
 
-export enum SwapMode {
-  ExactIn = 'ExactIn',
-  ExactOut = 'ExactOut',
-}
-
 export type SerializableQuoteParams = {
   sourceMint: string;
   destinationMint: string;
   amount: string;
-  swapMode: SwapMode;
 };
 
-export type SerializableSwapParams = {
+export type SerializableLeg = {
   sourceMint: string;
   destinationMint: string;
-  userSourceTokenAccount: string;
-  userDestinationTokenAccount: string;
-  userTransferAuthority: string;
-  amount: string;
-  swapMode: SwapMode;
 };
 
-export type SerializableSwapLegAndAccounts = [
-  SwapLegType,
-  SerializableAccountMeta[],
-];
-
-export type SerializableAccountMeta = {
-  pubkey: string;
-  isSigner: boolean;
-  isWritable: boolean;
-};
-
-export type SerializableRoute = {
-  sourceMint: string;
-  destinationMint: string;
-  amount: string;
+export type SerializableLegFixed = SerializableLeg & {
   marketId: string;
-  tradeOutputOverride: null | {
-    in: string;
-    estimatedOut: string;
-  };
-}[];
+  dex: JupiterDexProgramLabel;
+  in: string;
+  estimatedOutExcludingFees: string
+};
 
-export type Quote = { in: JsbiType; out: JsbiType };
+export type Quote = { in: JsbiType; out: JsbiType; quote: QuoteResponse };
+
 export type SerializableQuote = {
   in: string;
   out: string;
+  quote: QuoteResponse
 };

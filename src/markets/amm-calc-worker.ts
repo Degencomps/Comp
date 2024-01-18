@@ -1,16 +1,23 @@
 import { Amm, ammFactory } from '@jup-ag/core';
 import { AccountInfo, PublicKey } from '@solana/web3.js';
 import { parentPort, workerData } from 'worker_threads';
+import { jupiterClient } from '../clients/jupiter.js';
+import { config } from '../config.js';
 import { logger as loggerOrig } from '../logger.js';
+import { JSBI, JsbiType } from '../types.js';
 import { JupiterDexProgramLabel } from './jupiter/index.js';
 import {
   AddPoolParamPayload,
   AmmCalcWorkerParamMessage,
   AmmCalcWorkerResultMessage,
+  CalculateJupiterQuotesParamPayload,
+  Quote,
+  SerializableLeg,
+  SerializableLegFixed,
 } from './types.js';
-import { toAccountInfo } from './utils.js';
+import { toAccountInfo, toSerializableQuote } from './utils.js';
 
-// const JSBI = defaultImport(jsbi);
+const ARB_CALCULATION_NUM_STEPS = JSBI.BigInt(config.get('arb_calculation_num_steps'));
 
 const workerId = workerData.workerId;
 
@@ -42,6 +49,7 @@ function addPool(
     },
   };
 
+  // this isn't even stricktly needed
   try {
     if (poolLabel !== 'Raydium CLMM') {
       const amm = ammFactory(new PublicKey(id), accountInfo, params);
@@ -65,83 +73,128 @@ function addPool(
       response.payload.accountsForUpdate = accountsForUpdate;
       response.payload.success = true;
     }
-
-    feeForAmm.set(id, feeRateBps);
   } catch (e) {
     logger.error(`Failed to add pool ${poolLabel} ${id}`);
   }
 
+  feeForAmm.set(id, feeRateBps);
+
   parentPort!.postMessage(response);
 }
 
-// async function calculateRoute(route: SerializableRoute) {
-//   logger.trace(route, `Calculating route`);
-//   let amount = JSBI.BigInt(route[0].amount);
-//   let firstIn: JsbiType | null = null;
-//   for (const hop of route) {
-//     if (hop.tradeOutputOverride !== null) {
-//       const tradeOutputOverride = hop.tradeOutputOverride;
-//       const overrideInputAmount = JSBI.BigInt(tradeOutputOverride.in);
-//       const overrideOutputAmountWithoutFees = JSBI.BigInt(
-//         tradeOutputOverride.estimatedOut,
-//       );
+async function fetchJupiterQuote(sourceMint: string, destinationMint: string, amountIn: string, excludeDexes: JupiterDexProgramLabel[]) {
+  const quote = await jupiterClient.quoteGet({
+    inputMint: sourceMint,
+    outputMint: destinationMint,
+    amount: parseInt(amountIn),
+    slippageBps: 0,
+    onlyDirectRoutes: true,
+    excludeDexes: ["Perps", ...excludeDexes]
+  })
 
-//       // subtract fees in both directions (the original trade & the backrun trade)
-//       const fee = feeForAmm.get(hop.marketId) * 2;
-//       const overrideOutputAmount = JSBI.subtract(
-//         overrideOutputAmountWithoutFees,
-//         JSBI.divide(
-//           JSBI.multiply(overrideOutputAmountWithoutFees, JSBI.BigInt(fee)),
-//           JSBI.BigInt(10000),
-//         ),
-//       );
+  return {
+    in: JSBI.BigInt(quote.inAmount),
+    out: JSBI.BigInt(quote.otherAmountThreshold),
+    quote
+  }
+}
 
-//       if (!firstIn) firstIn = amount;
+function calculateFixedLegQuote(input: JsbiType, marketId: string, originalIn: JsbiType, originalOutExcludingFees: JsbiType) {
+  const feeRateBps = feeForAmm.get(marketId) * 2;
 
-//       const scalingFactor = JSBI.BigInt(10000);
+  const originalOutputAfterFees = JSBI.subtract(
+    originalOutExcludingFees,
+    JSBI.divide(
+      JSBI.multiply(originalOutExcludingFees, JSBI.BigInt(feeRateBps)),
+      JSBI.BigInt(10000),
+    ),
+  );
 
-//       // Scale the amounts before the calculation
-//       // If overrideOutputAmount is significantly larger than overrideInputAmount and amount is small,
-//       // the result of JSBI.multiply(amount, overrideOutputAmount) can be significantly smaller than overrideInputAmount.
-//       const scaledAmount = JSBI.multiply(amount, scalingFactor);
-//       const scaledOverrideOutputAmount = JSBI.multiply(
-//         overrideOutputAmount,
-//         scalingFactor,
-//       );
+  const scalingFactor = JSBI.BigInt(10000);
 
-//       // Calculate the output for the current input amount based on the same ratio as the override
-//       amount = JSBI.divide(
-//         JSBI.multiply(scaledAmount, scaledOverrideOutputAmount),
-//         JSBI.multiply(overrideInputAmount, scalingFactor),
-//       );
+  // Scale the amounts before the calculation
+  // If overrideOutputAmount is significantly larger than overrideInputAmount and amount is small,
+  // the result of JSBI.multiply(amount, overrideOutputAmount) can be significantly smaller than overrideInputAmount.
+  const scaledInput = JSBI.multiply(input, scalingFactor);
+  const scaledOriginalInput = JSBI.multiply(originalIn, scalingFactor)
+  const scaledOriginalOutput = JSBI.multiply(
+    originalOutputAfterFees,
+    scalingFactor,
+  );
 
-//       // Scale the result back down after the calculation
-//       amount = JSBI.divide(amount, scalingFactor);
+  // Calculate the output for the current input amount based on the same ratio as the override
+  let output = JSBI.divide(
+    JSBI.multiply(scaledInput, scaledOriginalOutput),
+    scaledOriginalInput,
+  );
 
-//       continue;
-//     }
-//     const quoteParams: QuoteParams = {
-//       amount,
-//       swapMode: SwapMode.ExactIn,
-//       sourceMint: new PublicKey(hop.sourceMint),
-//       destinationMint: new PublicKey(hop.destinationMint),
-//     };
-//     const amm = pools.get(hop.marketId);
-//     const quote = calculateHop(amm, quoteParams);
-//     amount = quote.out;
-//     if (!firstIn) firstIn = quote.in;
-//     if (JSBI.equal(amount, JSBI.BigInt(0))) break;
-//   }
+  // Scale the result back down after the calculation
+  output = JSBI.divide(output, scalingFactor);
 
-//   const message: AmmCalcWorkerResultMessage = {
-//     type: 'calculateRoute',
-//     payload: {
-//       quote: { in: firstIn!.toString(), out: amount.toString() },
-//     },
-//   };
+  return {
+    in: input,
+    out: output
+  }
+}
 
-//   return message;
-// }
+function calculateSteppedInputs(inputBase: JsbiType, steps: JsbiType) {
+  const stepSize = JSBI.divide(inputBase, steps)
+  return new Array(steps).map((_, i) => JSBI.add(inputBase, JSBI.multiply(stepSize, JSBI.BigInt(i))));
+}
+
+function calculatedFixedLegQuotes(inputSteps: JsbiType[], balancingLeg: SerializableLegFixed) {
+  return inputSteps
+    .map(i => calculateFixedLegQuote(i, balancingLeg.marketId, JSBI.BigInt(balancingLeg.in), JSBI.BigInt(balancingLeg.estimatedOutExcludingFees)))
+}
+
+async function calculateJupiterQuotes(balancingLeg: SerializableLegFixed, mirroringLeg: SerializableLeg, balancingLegFirst: boolean) {
+  const profitableQuotes: Quote[] = [];
+
+  if (balancingLegFirst) {
+    const inputBase = JSBI.divide(JSBI.BigInt(balancingLeg.in), JSBI.BigInt(2))
+    const inputSteps = calculateSteppedInputs(inputBase, ARB_CALCULATION_NUM_STEPS);
+    const balancingLegQuotes = calculatedFixedLegQuotes(inputSteps, balancingLeg);
+    const mirroringLegQuotes = await Promise.all(balancingLegQuotes.map(q => fetchJupiterQuote(mirroringLeg.sourceMint, mirroringLeg.destinationMint, q.out.toString(), [balancingLeg.dex])))
+
+    for (const [i, q] of balancingLegQuotes.entries()) {
+      const mirroringLeg = mirroringLegQuotes[i]
+      const profit = JSBI.subtract(mirroringLeg.out, q.in)
+      if (JSBI.greaterThan(profit, JSBI.BigInt(0))) {
+        profitableQuotes.push({
+          in: q.in,
+          out: mirroringLeg.out,
+          quote: mirroringLeg.quote
+        })
+      }
+    }
+  } else {
+    const inputBase = JSBI.divide(JSBI.BigInt(balancingLeg.estimatedOutExcludingFees), JSBI.BigInt(2));
+    const inputSteps = calculateSteppedInputs(inputBase, ARB_CALCULATION_NUM_STEPS);
+    const mirroringLegQuotes = await Promise.all(inputSteps.map(i => fetchJupiterQuote(mirroringLeg.sourceMint, mirroringLeg.destinationMint, i.toString(), [balancingLeg.dex])))
+    const balancingLegQuotes = calculatedFixedLegQuotes(mirroringLegQuotes.map(q => q.out), balancingLeg)
+
+    for (const [i, q] of balancingLegQuotes.entries()) {
+      const mirroringLeg = mirroringLegQuotes[i]
+      const profit = JSBI.subtract(q.out, mirroringLeg.in)
+      if (JSBI.greaterThan(profit, JSBI.BigInt(0))) {
+        profitableQuotes.push({
+          in: mirroringLeg.in,
+          out: q.out,
+          quote: mirroringLeg.quote
+        })
+      }
+    }
+  }
+
+  const response: AmmCalcWorkerResultMessage = {
+    type: 'calculateJupiterQuotes',
+    payload: {
+      quotes: profitableQuotes.map(toSerializableQuote),
+    },
+  }
+
+  parentPort!.postMessage(response);
+}
 
 parentPort.on('message', (message: AmmCalcWorkerParamMessage) => {
   switch (message.type) {
@@ -150,6 +203,12 @@ parentPort.on('message', (message: AmmCalcWorkerParamMessage) => {
         message.payload as AddPoolParamPayload;
       const accountInfo = toAccountInfo(serializableAccountInfo);
       addPool(poolLabel, id, accountInfo, feeRateBps, params);
+      break;
+    }
+    case 'calculateJupiterQuotes': {
+      const { balancingLeg, mirroringLeg, balancingLegFirst } =
+        message.payload as CalculateJupiterQuotesParamPayload;
+      calculateJupiterQuotes(balancingLeg, mirroringLeg, balancingLegFirst);
       break;
     }
   }

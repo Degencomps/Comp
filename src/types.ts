@@ -1,4 +1,7 @@
-import JSBI from 'jsbi';
+import { defaultImport } from 'default-import';
+import jsbi from 'jsbi';
+
+export const JSBI = defaultImport(jsbi);
 
 export type Timings = {
   mempoolEnd: number;

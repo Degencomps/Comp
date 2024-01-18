@@ -1,6 +1,6 @@
 // import { buildBundle } from './build-bundle.js';
 // import { calculateArb } from './calculate-arb.js';
-import bs58 from "bs58";
+import { calculateArb } from "./calculate-arb.js";
 import { logger } from "./logger.js";
 import { mempool } from './mempool.js';
 import { postSimulateFilter } from './post-simulation-filter.js';
@@ -17,21 +17,15 @@ const filteredTransactions = preSimulationFilter(mempoolUpdates);
 // simulate those transactions
 const simulations = simulate(filteredTransactions);
 
-
 // find transactions that are 'trades in pools'
 const backrunnableTrades = postSimulateFilter(simulations);
 
+//find potential arb opportunities
+const arbIdeas = calculateArb(backrunnableTrades);
 
-for await (const backrunnableTrade of backrunnableTrades) {
-  logger.info(`backrunnableTrade ${bs58.encode(backrunnableTrade.txn.signatures[0]).slice(0, 4)}... \
-on ${backrunnableTrade.market.dexLabel} for ${backrunnableTrade.market.tokenMintA.slice(0, 4)}.../${backrunnableTrade.market.tokenMintB.slice(0, 4)}... \
-${backrunnableTrade.tradeSizeA}/${backrunnableTrade.tradeSizeB} by ${backrunnableTrade.txn.message.staticAccountKeys[0].toBase58()} \
-with ${backrunnableTrade.priceImpactPct.toFixed(3)}% price impact \
-in ${backrunnableTrade.timings.postSimEnd - backrunnableTrade.timings.mempoolEnd}ms`);
+for await (const idea of arbIdeas) {
+  logger.info(idea.expectedProfit.toString());
 }
-
-// find potential arb opportunities
-// const arbIdeas = calculateArb(backrunnableTrades);
 
 // build the bundle to submit
 // buildBundle(arbIdeas);

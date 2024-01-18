@@ -1,9 +1,3 @@
-import {
-  Quote as JupiterQuote,
-  QuoteParams,
-} from '@jup-ag/core/dist/lib/amm.js';
-import { defaultImport } from 'default-import';
-import jsbi from 'jsbi';
 import { config } from '../config.js';
 import { BASE_MINTS_OF_INTEREST_B58 } from '../constants.js';
 import { logger } from '../logger.js';
@@ -17,16 +11,13 @@ import {
   AddPoolResultPayload,
   AmmCalcWorkerParamMessage,
   AmmCalcWorkerResultMessage,
-  CalculateQuoteResultPayload,
-  CalculateRouteResultPayload,
+  CalculateJupiterQuotesParamPayload,
+  CalculateJupiterQuotesResultPayload,
   DEX,
   Market,
-  Quote,
-  SerializableRoute,
+  Quote
 } from './types.js';
-import { toJupiterQuote, toSerializableQuoteParams } from './utils.js';
-
-const JSBI = defaultImport(jsbi);
+import { toQuote } from './utils.js';
 
 const NUM_WORKER_THREADS = config.get('num_worker_threads');
 
@@ -199,42 +190,43 @@ function getAll2HopRoutes(
   return routes;
 }
 
-async function calculateQuote(
-  poolId: string,
-  params: QuoteParams,
+// async function calculateQuote(
+//   poolId: string,
+//   params: QuoteParams,
+//   timeout?: number,
+//   prioritze?: boolean,
+// ): Promise<JupiterQuote | null> {
+//   logger.debug(`Calculating quote for ${poolId} ${JSON.stringify(params)}`);
+//   const serializableQuoteParams = toSerializableQuoteParams(params);
+//   const message: AmmCalcWorkerParamMessage = {
+//     type: 'calculateQuote',
+//     payload: {
+//       id: poolId,
+//       params: serializableQuoteParams,
+//     },
+//   };
+
+//   const result = await ammCalcWorkerPool.runTask<
+//     AmmCalcWorkerParamMessage,
+//     AmmCalcWorkerResultMessage
+//   >(message, timeout, prioritze);
+//   if (result === null) return null;
+//   const payload = result.payload as CalculateQuoteResultPayload;
+//   if (payload.error !== undefined) throw payload.error;
+
+//   const serializableQuote = payload.quote;
+//   const quote = toJupiterQuote(serializableQuote);
+//   return quote;
+// }
+
+
+async function calculateJupiterQuotes(
+  request: CalculateJupiterQuotesParamPayload,
   timeout?: number,
-  prioritze?: boolean,
-): Promise<JupiterQuote | null> {
-  logger.debug(`Calculating quote for ${poolId} ${JSON.stringify(params)}`);
-  const serializableQuoteParams = toSerializableQuoteParams(params);
+): Promise<Quote[] | null> {
   const message: AmmCalcWorkerParamMessage = {
-    type: 'calculateQuote',
-    payload: {
-      id: poolId,
-      params: serializableQuoteParams,
-    },
-  };
-
-  const result = await ammCalcWorkerPool.runTask<
-    AmmCalcWorkerParamMessage,
-    AmmCalcWorkerResultMessage
-  >(message, timeout, prioritze);
-  if (result === null) return null;
-  const payload = result.payload as CalculateQuoteResultPayload;
-  if (payload.error !== undefined) throw payload.error;
-
-  const serializableQuote = payload.quote;
-  const quote = toJupiterQuote(serializableQuote);
-  return quote;
-}
-
-async function calculateRoute(
-  route: SerializableRoute,
-  timeout?: number,
-): Promise<Quote | null> {
-  const message: AmmCalcWorkerParamMessage = {
-    type: 'calculateRoute',
-    payload: { route },
+    type: 'calculateJupiterQuotes',
+    payload: request,
   };
   const result = await ammCalcWorkerPool.runTask<
     AmmCalcWorkerParamMessage,
@@ -243,21 +235,17 @@ async function calculateRoute(
 
   if (result === null) return null;
 
-  const payload = result.payload as CalculateRouteResultPayload;
-  const serializableQuote = payload.quote;
+  const payload = result.payload as CalculateJupiterQuotesResultPayload;
+  const serializableQuotes = payload.quotes;
 
-  return {
-    in: JSBI.BigInt(serializableQuote.in),
-    out: JSBI.BigInt(serializableQuote.out),
-  };
+  return serializableQuotes.map(toQuote)
 }
 
 export {
-  DEX,
-  calculateQuote,
-  calculateRoute,
+  DEX, calculateJupiterQuotes,
   getAll2HopRoutes,
   getMarketForVault,
   getMarketsForPair,
-  isTokenAccountOfInterest,
+  isTokenAccountOfInterest
 };
+
