@@ -97,6 +97,7 @@ async function fetchJupiterQuote(sourceMint: string, destinationMint: string, am
       amount: Math.floor(parseFloat(amountIn)),
       slippageBps: 0,
       onlyDirectRoutes: true,
+      asLegacyTransaction: true
       //excludeDexes: ["Perps", ...excludeDexes]
     })
 
