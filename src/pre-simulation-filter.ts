@@ -57,10 +57,8 @@ async function* preSimulationFilter(
           addressLookupTableAccounts,
         });
       } catch (e) {
-        logger.warn(e, 'address not in lookup table, refreshing');
-        for (const lookup of txn.message.addressTableLookups) {
-          await lookupTableProvider.getLookupTable(lookup.accountKey, true);
-        }
+        logger.warn(`Address not in lookup table, refreshing`);
+        await Promise.all(txn.message.addressTableLookups.map(l => lookupTableProvider.getLookupTable(l.accountKey, true)))
       }
       const accountsOfInterest = new Set<string>();
 
