@@ -123,7 +123,7 @@ async function* buildBundle(
   arbIdeaIterator: AsyncGenerator<ArbIdea>,
 ): AsyncGenerator<Arb> {
   for await (const arbIdea of arbIdeaIterator) {
-    const { txn, timings, trade } = arbIdea;
+    const { txn,  timings, trade } = arbIdea;
     const { in: inAmount, out: outAmount, mirroringLegQuote, balancingLeg, balancingLegFirst } = trade;
 
     const mirroringLegRoutePlan = mirroringLegQuote.routePlan
@@ -317,7 +317,7 @@ async function* buildBundle(
         randomSeed,
         new BN(minimumProfitInBaseToken), // minimum profit in base token
         lamportsPerBaseToken,
-        new BN(TIP_BPS), // tip bps of the (profit minus minimum profit in base token)
+        new BN(TIP_BPS), // tip bps of the (profit minus minimum profit in base token) TODO: dynamic tip in custom program
         new BN(MAX_TIP_BPS), // max tip bps of the sol balance
         new BN(MIN_TIP_LAMPORTS), // requires tip > min tip amount
       )
