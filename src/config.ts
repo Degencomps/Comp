@@ -75,7 +75,7 @@ const config = convict({
     env: 'MAX_TIP_BPS',
   },
   ledger_program: {
-    format: Number,
+    format: String,
     default: "6688eXUZ2nrEod2ZrXyoD446C4Na9mMuioXPYawKT2bF",
     env: 'LEDGER_PROGRAM',
   },
