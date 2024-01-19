@@ -96,7 +96,7 @@ async function fetchJupiterQuote(sourceMint: string, destinationMint: string, am
       outputMint: destinationMint,
       amount: Math.floor(parseFloat(amountIn)),
       slippageBps: 0,
-      onlyDirectRoutes: true,
+      onlyDirectRoutes: false,
       asLegacyTransaction: true,
       excludeDexes: ["Perps", ..._excludeDexes]
     })
@@ -108,7 +108,7 @@ async function fetchJupiterQuote(sourceMint: string, destinationMint: string, am
     }
   } catch (e) {
     const url = `inputMint=${sourceMint}&outputMint=${destinationMint}&amount=${Math.floor(parseFloat(amountIn))}&slippageBps=0&onlyDirectRoutes=true`
-    logger.warn('Failed to fetch Jupiter quote, try manually: ' + url)
+    logger.debug('Failed to fetch Jupiter quote, try manually: ' + url)
 
     return {
       in: ZERO, out: ZERO

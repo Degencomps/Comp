@@ -6,6 +6,7 @@ import { Arb } from './build-bundle.js';
 import { searcherClient } from './clients/jito.js';
 import { connection } from './clients/rpc.js';
 import { logger } from './logger.js';
+import { MAX_TRADE_AGE_MS } from "./calculate-arb.js";
 
 const CHECK_LANDED_DELAY_MS = 30000;
 
@@ -133,6 +134,11 @@ async function sendBundle(bundleIterator: AsyncGenerator<Arb>): Promise<void> {
     timings,
   } of bundleIterator) {
     const now = Date.now();
+    if (now - timings.mempoolEnd > MAX_TRADE_AGE_MS) {
+      logger.debug(`Trade is too old, skipping send bundle`);
+      continue;
+    }
+
     searcherClient
       .sendBundle(new JitoBundle(bundle, 5))
       .then((bundleId) => {
@@ -143,7 +149,7 @@ async function sendBundle(bundleIterator: AsyncGenerator<Arb>): Promise<void> {
         );
 
         timings.bundleSent = now;
-        logger.debug(
+        logger.info(
           `chain timings: pre sim: ${
             timings.preSimEnd - timings.mempoolEnd
           }ms, sim: ${timings.simEnd - timings.preSimEnd}ms, post sim: ${

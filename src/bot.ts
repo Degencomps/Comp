@@ -26,6 +26,5 @@ const arbIdeas = calculateArb(backrunnableTrades);
 // build the bundle to submit
 const bundles = buildBundle(arbIdeas);
 
-
 // submit bundles
 await sendBundle(bundles);

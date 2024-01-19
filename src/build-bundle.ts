@@ -1,11 +1,11 @@
 import {
-  AddressLookupTableAccount,
+  AddressLookupTableAccount, ComputeBudgetProgram,
   Keypair,
   PublicKey, SystemProgram, SYSVAR_INSTRUCTIONS_PUBKEY, TransactionInstruction, TransactionMessage,
   VersionedTransaction,
 } from "@solana/web3.js";
-import { ArbIdea, ArbIdeaTrade } from './calculate-arb.js';
-import { Timings } from './types.js';
+import { ArbIdea, ArbIdeaTrade, LAMPORTS_PER_USDC_UNIT } from './calculate-arb.js';
+import { JSBI, Timings } from './types.js';
 import * as fs from 'fs';
 import * as anchor from '@coral-xyz/anchor';
 import { config } from './config.js';
@@ -15,9 +15,9 @@ import { jupiterClient } from './clients/jupiter.js';
 import { connection } from "./clients/rpc.js";
 import BN from "bn.js";
 import {
+  createAssociatedTokenAccountInstruction, createCloseAccountInstruction,
   createSyncNativeInstruction,
-  getAssociatedTokenAddressSync,
-  getMinimumBalanceForRentExemptAccount
+  getAssociatedTokenAddressSync, NATIVE_MINT
 } from "@solana/spl-token-3";
 import { Program } from "@coral-xyz/anchor";
 import { IDL as JitoBomb } from "./clients/types/jito_bomb.js";
@@ -44,11 +44,14 @@ const MAX_TIP_BPS = config.get('max_tip_bps');
 const LEDGER_PROGRAM_ID = config.get('ledger_program')
 const TXN_FEES_LAMPORTS = config.get('txn_fees_lamports'); // transaction fees in lamports TODO: need to consider new token account rents?
 
-const MIN_BALANCE_RENT_EXEMPT_TOKEN_ACC =
-  await getMinimumBalanceForRentExemptAccount(connection);
+const MAX_USDC = 1200 * 10 ** 6
+const MAX_SOL = 12 * 10 ** 9
+
+// const MIN_BALANCE_RENT_EXEMPT_TOKEN_ACC =
+//   await getMinimumBalanceForRentExemptAccount(connection);
 
 // TODO: default minimum profit needs to cover transaction fee and the rent of tokens (regardless if there is a new one)
-const MIN_PROFIT_IN_LAMPORTS = TXN_FEES_LAMPORTS + MIN_BALANCE_RENT_EXEMPT_TOKEN_ACC; // in lamports
+const MIN_PROFIT_IN_LAMPORTS = TXN_FEES_LAMPORTS // + MIN_BALANCE_RENT_EXEMPT_TOKEN_ACC; // in lamports
 
 const payer = Keypair.fromSecretKey(
   Uint8Array.from(
@@ -63,32 +66,8 @@ const provider = new anchor.AnchorProvider(connection, wallet, {
 const ledgerProgram = new Program(JitoBomb, LEDGER_PROGRAM_ID, provider)
 
 // todo: need to dynamically update this
-const LAMPORTS_PER_USDC_UNITS = 10; // 1 soL = $100 usdc; 1000_000_000 lamports = 100_000_000 usdc units
+const LAMPORTS_PER_USDC_UNITS = LAMPORTS_PER_USDC_UNIT
 
-function removeDuplicateSetupInstructions(instructions: Instruction[]) {
-  const setupInstructions: Instruction[] = []
-  let isWrappedSol = false;
-  let isTransferSol = false;
-  for (const instruction of instructions) {
-    if (instruction.programId === "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL") {
-      setupInstructions.push(instruction)
-      continue
-    }
-
-    if (instruction.programId === "11111111111111111111111111111111" && !isWrappedSol) {
-      setupInstructions.push(instruction)
-      isWrappedSol = true
-      continue
-    }
-
-    if (instruction.programId === "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA" && !isTransferSol) {
-      setupInstructions.push(instruction)
-      isTransferSol = true
-    }
-  }
-
-  return setupInstructions
-}
 
 function deserializeSwapInstruction(instruction: Instruction) {
   return new TransactionInstruction({
@@ -153,6 +132,20 @@ async function* buildBundle(
 
     const baseMint = balancingLegFirst ? balancingLeg.sourceMint : balancingLeg.destinationMint
 
+    // todo: should put this logic in quote calculator
+    let inAmountNumber = JSBI.toNumber(inAmount)
+    inAmountNumber = baseMint === BASE_MINTS_OF_INTEREST_B58.SOL ? Math.min(inAmountNumber, MAX_SOL) : Math.min(inAmountNumber, MAX_USDC)
+    // filter out trades that are too small
+    if (baseMint === BASE_MINTS_OF_INTEREST_B58.SOL) {
+      if (JSBI.lessThan(inAmount, JSBI.BigInt(100_000_000))) {
+        continue
+      }
+    } else if (baseMint === BASE_MINTS_OF_INTEREST_B58.USDC) {
+      if (JSBI.lessThan(inAmount, JSBI.BigInt(5_000_000))) {
+        continue
+      }
+    }
+
     if (balancingLegFirst) {
       const allRoutesPlan: RoutePlanStep[] = []
 
@@ -175,11 +168,11 @@ async function* buildBundle(
       allRoutesQuote = {
         inputMint: balancingLeg.sourceMint,
         outputMint: balancingLeg.sourceMint,
-        inAmount: inAmount.toString(),
-        outAmount: inAmount.toString(),
-        otherAmountThreshold: inAmount.toString(), // this is not used by jupiter
+        inAmount: inAmountNumber.toString(),
+        outAmount: inAmountNumber.toString(),
+        otherAmountThreshold: inAmountNumber.toString(), // this is not used by jupiter
         swapMode: SwapMode.ExactIn,
-        slippageBps: 1000, // we have ledger to check at the end so this is ok
+        slippageBps: 2000, // we have ledger to check at the end so this is ok
         priceImpactPct: "1", // does it matter
         routePlan: allRoutesPlan,
       }
@@ -206,11 +199,11 @@ async function* buildBundle(
       allRoutesQuote = {
         inputMint: balancingLeg.destinationMint,
         outputMint: balancingLeg.destinationMint,
-        inAmount: inAmount.toString(),
-        outAmount: inAmount.toString(),
-        otherAmountThreshold: inAmount.toString(), // this is not used by jupiter
+        inAmount: inAmountNumber.toString(),
+        outAmount: inAmountNumber.toString(),
+        otherAmountThreshold: inAmountNumber.toString(), // this is not used by jupiter
         swapMode: SwapMode.ExactIn,
-        slippageBps: 1000, // we have ledger to check at the end so this is ok
+        slippageBps: 2000, // we have ledger to check at the end so this is ok
         priceImpactPct: "1", // does it matter
         routePlan: allRoutesPlan,
       }
@@ -238,9 +231,6 @@ async function* buildBundle(
       continue
     }
 
-    // dedup wrapped sol instruction
-    const setupInstructions = removeDuplicateSetupInstructions(allSwapInstructionsResponse.setupInstructions)
-
     const randomSeed = new BN(Math.floor(Math.random() * 1000000));
 
     // todo: to optimize this
@@ -265,10 +255,38 @@ async function* buildBundle(
     const instructions: TransactionInstruction[] = []
 
     // todo: do we still need prioritization fee
-    instructions.push(
-      // ...allSwapInstructionsResponse.computeBudgetInstructions.map(deserializeSwapInstruction),
-      ...setupInstructions.map(deserializeSwapInstruction),
-    )
+
+    // increse compute unit
+    const modifyComputeUnitsIx = ComputeBudgetProgram.setComputeUnitLimit({
+      units: 1000000
+    });
+
+    instructions.push(modifyComputeUnitsIx)
+
+    if (baseMint === BASE_MINTS_OF_INTEREST_B58.SOL) {
+      const wrappedSolAccount = getAta(NATIVE_MINT, wallet.publicKey)
+
+      // create wrapped sol account
+      const createWrappedSolAccountIx =
+        createAssociatedTokenAccountInstruction(
+          wallet.publicKey,
+          wrappedSolAccount,
+          wallet.publicKey,
+          NATIVE_MINT
+        )
+
+      // transfer sol
+      const transferIx = SystemProgram.transfer({
+        fromPubkey: wallet.publicKey,
+        toPubkey: wrappedSolAccount,
+        lamports: inAmountNumber
+      });
+
+      instructions.push(createWrappedSolAccountIx)
+
+      instructions.push(transferIx)
+      instructions.push(syncNativeIx)
+    }
 
     const startLedgerIx = await ledgerProgram.methods
       .startLedger(randomSeed)
@@ -315,8 +333,16 @@ async function* buildBundle(
 
     instructions.push(endLedgerIx)
 
-    if (allSwapInstructionsResponse.cleanupInstruction) {
-      instructions.push(deserializeSwapInstruction(allSwapInstructionsResponse.cleanupInstruction))
+    if (baseMint === BASE_MINTS_OF_INTEREST_B58.SOL) {
+      const wrappedSolAccount = getAta(NATIVE_MINT, wallet.publicKey)
+      // close wrapped sol account
+      const closeWrappedSolAccountIx = createCloseAccountInstruction(
+        wrappedSolAccount,
+        wallet.publicKey,
+        wallet.publicKey
+      );
+
+      instructions.push(closeWrappedSolAccountIx)
     }
 
     const addressLookupTableAccounts: AddressLookupTableAccount[] = [];
@@ -334,6 +360,13 @@ async function* buildBundle(
 
     // sign and send
     backrunningTx.sign([wallet.payer]);
+
+    // const res = await connection.simulateTransaction(backrunningTx, {
+    //   replaceRecentBlockhash: false,
+    //   commitment: "confirmed",
+    // })
+    //
+    // logger.info({ res }, "simulateTransaction")
 
     // construct bundle
     const bundle = [txn, backrunningTx];

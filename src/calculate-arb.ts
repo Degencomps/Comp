@@ -27,8 +27,9 @@ const USDC_SOL_PRICE = 100;
 // ratio in lamports
 // multiply by 1000 since USDC is 6 decimals and SOL is 9 decimals to get lamport for lamport equivalence
 // then divice by SOL/USDC price to get USDC -> SOL ratio
-const USDC_SOL_RATIO = BigInt(Math.floor(1000 / USDC_SOL_PRICE));
-const MAX_TRADE_AGE_MS = 200;
+export const LAMPORTS_PER_USDC_UNIT = Math.floor(1000 / USDC_SOL_PRICE)
+const USDC_SOL_RATIO = BigInt(LAMPORTS_PER_USDC_UNIT);
+export const MAX_TRADE_AGE_MS = 200;
 
 export type ArbIdeaTrade = {
   in: JsbiType,
