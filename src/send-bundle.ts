@@ -27,15 +27,7 @@ type TradeCSV = {
   errorContent: string | null;
   txn0Signature: string;
   txn1Signature: string;
-  // arbSize: string;
-  // expectedProfit: string;
-  // hop1Dex: string;
-  // hop2Dex: string;
-  // hop3Dex: string;
-  // sourceMint: string;
-  // intermediateMint1: string;
-  // intermediateMint2: string;
-  // tipLamports: string;
+  trade: string;
   mempoolEnd: number;
   preSimEnd: number;
   simEnd: number;
@@ -66,13 +58,13 @@ async function processCompletedTrade(uuid: string) {
     })
     .catch(() => {
       logger.info(
-        `getTransaction failed. Assuming txn1 ${txn1Signature} did not land`,
+        `getTransaction failed. Backrunning ${txn0Signature}; Assuming txn1 ${txn1Signature} did not land`,
       );
       return null;
     });
 
   if (txn1 !== null) {
-    logger.info(`Tx ${txn1Signature} landed`);
+    logger.info(`Money money: Backrunning ${txn0Signature} with Tx ${txn1Signature} landed`);
     trade.landed = true;
   }
 
@@ -86,17 +78,7 @@ async function processCompletedTrade(uuid: string) {
     errorContent: trade.errorContent,
     txn0Signature,
     txn1Signature,
-    // arbSize: trade.arbSize.toString(),
-    // expectedProfit: trade.expectedProfit.toString(),
-    // hop1Dex: trade.hop1Dex,
-    // hop2Dex: trade.hop2Dex,
-    // hop3Dex: trade.hop3Dex,
-    // sourceMint: trade.sourceMint.toString(),
-    // intermediateMint1: trade.intermediateMint1.toString(),
-    // intermediateMint2: trade.intermediateMint2
-    //   ? trade.intermediateMint2.toString()
-    //   : '',
-    // tipLamports: trade.tipLamports.toString(),
+    trade: JSON.stringify(trade.trade),
     mempoolEnd: trade.timings.mempoolEnd,
     preSimEnd: trade.timings.preSimEnd,
     simEnd: trade.timings.simEnd,
@@ -117,7 +99,7 @@ async function sendBundle(bundleIterator: AsyncGenerator<Arb>): Promise<void> {
       const isAccepted = bundleResult.accepted;
       const isRejected = bundleResult.rejected;
       if (isAccepted) {
-        logger.debug(
+        logger.info(
           `Bundle ${bundleId} accepted in slot ${bundleResult.accepted!.slot}`,
         );
         if (bundlesInTransit.has(bundleId)) {
@@ -125,21 +107,18 @@ async function sendBundle(bundleIterator: AsyncGenerator<Arb>): Promise<void> {
         }
       }
       if (isRejected) {
-        logger.debug(
-          `Bundle ${bundleId} rejected`,
-        );
-        // logger.info(bundleResult.rejected, `Bundle ${bundleId} rejected:`);
-        // if (bundlesInTransit.has(bundleId)) {
-        //   const trade: Trade = bundlesInTransit.get(bundleId)!;
-        //   trade.rejected = true;
-        //   const rejectedEntry = Object.entries(bundleResult.rejected!).find(
-        //     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        //     ([_, value]) => value !== undefined,
-        //   );
-        //   const [errorType, errorContent] = rejectedEntry!;
-        //   trade.errorType = errorType;
-        //   trade.errorContent = JSON.stringify(errorContent);
-        // }
+        logger.info({ result: bundleResult.rejected }, `Bundle ${bundleId} rejected:`);
+        if (bundlesInTransit.has(bundleId)) {
+          const trade: Trade = bundlesInTransit.get(bundleId)!;
+          trade.rejected = true;
+          const rejectedEntry = Object.entries(bundleResult.rejected!).find(
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            ([_, value]) => value !== undefined,
+          );
+          const [errorType, errorContent] = rejectedEntry!;
+          trade.errorType = errorType;
+          trade.errorContent = JSON.stringify(errorContent);
+        }
       }
     },
     (error) => {
@@ -150,15 +129,7 @@ async function sendBundle(bundleIterator: AsyncGenerator<Arb>): Promise<void> {
 
   for await (const {
     bundle,
-    // arbSize,
-    // expectedProfit,
-    // hop1Dex,
-    // hop2Dex,
-    // hop3Dex,
-    // sourceMint,
-    // intermediateMint1,
-    // intermediateMint2,
-    // tipLamports,
+    trade,
     timings,
   } of bundleIterator) {
     const now = Date.now();
@@ -168,11 +139,11 @@ async function sendBundle(bundleIterator: AsyncGenerator<Arb>): Promise<void> {
         logger.info(
           `Bundle ${bundleId} sent, backrunning ${bs58.encode(
             bundle[0].signatures[0],
-          )}`,
+          )} with Tx ${bs58.encode(bundle[1].signatures[0])}`,
         );
 
         timings.bundleSent = now;
-        logger.info(
+        logger.debug(
           `chain timings: pre sim: ${
             timings.preSimEnd - timings.mempoolEnd
           }ms, sim: ${timings.simEnd - timings.preSimEnd}ms, post sim: ${
@@ -193,15 +164,7 @@ async function sendBundle(bundleIterator: AsyncGenerator<Arb>): Promise<void> {
           errorType: null,
           errorContent: null,
           landed: false,
-          // arbSize,
-          // expectedProfit,
-          // hop1Dex,
-          // hop2Dex,
-          // hop3Dex,
-          // sourceMint,
-          // intermediateMint1,
-          // intermediateMint2,
-          // tipLamports,
+          trade,
           timings,
         });
         setTimeout(() => {
@@ -210,7 +173,7 @@ async function sendBundle(bundleIterator: AsyncGenerator<Arb>): Promise<void> {
       })
       .catch((error) => {
         timings.bundleSent = now;
-        logger.info(
+        logger.debug(
           `chain timings: pre sim: ${
             timings.preSimEnd - timings.mempoolEnd
           }ms, sim: ${timings.simEnd - timings.preSimEnd}ms, post sim: ${
@@ -247,17 +210,7 @@ async function sendBundle(bundleIterator: AsyncGenerator<Arb>): Promise<void> {
           errorContent: JSON.stringify(error),
           txn0Signature,
           txn1Signature,
-          // arbSize: arbSize.toString(),
-          // expectedProfit: expectedProfit.toString(),
-          // hop1Dex: hop1Dex,
-          // hop2Dex: hop2Dex,
-          // hop3Dex: hop3Dex,
-          // sourceMint: sourceMint.toString(),
-          // intermediateMint1: intermediateMint1.toString(),
-          // intermediateMint2: intermediateMint2
-          //   ? intermediateMint2.toString()
-          //   : '',
-          // tipLamports: tipLamports.toString(),
+          trade: JSON.stringify(trade),
           mempoolEnd: timings.mempoolEnd,
           preSimEnd: timings.preSimEnd,
           simEnd: timings.simEnd,

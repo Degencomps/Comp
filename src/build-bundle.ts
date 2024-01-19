@@ -4,7 +4,7 @@ import {
   PublicKey, SystemProgram, SYSVAR_INSTRUCTIONS_PUBKEY, TransactionInstruction, TransactionMessage,
   VersionedTransaction,
 } from "@solana/web3.js";
-import { ArbIdea } from './calculate-arb.js';
+import { ArbIdea, ArbIdeaTrade } from './calculate-arb.js';
 import { Timings } from './types.js';
 import * as fs from 'fs';
 import * as anchor from '@coral-xyz/anchor';
@@ -18,7 +18,7 @@ import { createSyncNativeInstruction, getAssociatedTokenAddressSync } from "@sol
 import { Program } from "@coral-xyz/anchor";
 import { IDL as JitoBomb } from "./clients/types/jito_bomb.js";
 import { BASE_MINTS_OF_INTEREST_B58 } from "./constants.js";
-import bs58 from "bs58";
+import { Buffer } from "buffer";
 
 const TIP_ACCOUNTS = [
   '96gYZGLnJYVFmbjzopPSU6QiEV5fGqZNyN9nmNhvrZU5',
@@ -98,10 +98,10 @@ function deserializeSwapInstruction(instruction: Instruction) {
 async function getAddressLookupTableAccounts(
   keys: string[]
 ): Promise<AddressLookupTableAccount[]> {
-  const addressLookupTableAccountInfos =
-    await connection.getMultipleAccountsInfo(
-      keys.map((key) => new PublicKey(key))
-    );
+  // todo: optimize this
+  const addressLookupTableAccountInfos = await connection.getMultipleAccountsInfo(
+    keys.map((key) => new PublicKey(key))
+  );
 
   return addressLookupTableAccountInfos.reduce((acc, accountInfo, index) => {
     const addressLookupTableAddress = keys[index];
@@ -119,6 +119,7 @@ async function getAddressLookupTableAccounts(
 
 export type Arb = {
   bundle: VersionedTransaction[];
+  trade: ArbIdeaTrade
   timings: Timings;
 };
 
@@ -317,6 +318,7 @@ async function* buildBundle(
       ...(await getAddressLookupTableAccounts(allSwapInstructionsResponse.addressLookupTableAddresses))
     );
 
+    // todo: optimize blockhash
     const blockhash = (await connection.getLatestBlockhash("confirmed")).blockhash;
     const messageV0 = new TransactionMessage({
       payerKey: wallet.publicKey,
@@ -339,13 +341,9 @@ async function* buildBundle(
     // construct bundle
     const bundle = [txn, backrunningTx];
 
-    logger.info(
-      `Prepared bundle ${bs58.encode(
-        txn.signatures[0])} in ${Date.now() - timings.calcArbEnd}ms`,
-    )
-
     yield {
       bundle,
+      trade,
       timings: {
         mempoolEnd: timings.mempoolEnd,
         preSimEnd: timings.preSimEnd,

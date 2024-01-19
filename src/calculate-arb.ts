@@ -30,16 +30,18 @@ const USDC_SOL_PRICE = 100;
 const USDC_SOL_RATIO = BigInt(Math.floor(1000 / USDC_SOL_PRICE));
 const MAX_TRADE_AGE_MS = 200;
 
+export type ArbIdeaTrade = {
+  in: JsbiType,
+  out: JsbiType, // can ignore?
+  mirroringLegQuote: QuoteResponse,
+  balancingLeg: SerializableLegFixed,
+  balancingLegFirst: boolean
+}
+
 type ArbIdea = {
   txn: VersionedTransaction;
   expectedProfit: JsbiType;
-  trade: {
-    in: JsbiType,
-    out: JsbiType, // can ignore?
-    mirroringLegQuote: QuoteResponse,
-    balancingLeg: SerializableLegFixed,
-    balancingLegFirst: boolean
-  }
+  trade: ArbIdeaTrade
   timings: Timings;
 };
 
