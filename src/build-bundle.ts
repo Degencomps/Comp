@@ -9,7 +9,7 @@ import { JsbiType, Timings } from './types.js';
 import * as fs from 'fs';
 import * as anchor from '@coral-xyz/anchor';
 import { config } from './config.js';
-import { Instruction, QuoteResponse, RoutePlanStep, SwapMode } from "@jup-ag/api";
+import { Instruction, QuoteResponse, RoutePlanStep, SwapInstructionsResponse, SwapMode } from "@jup-ag/api";
 import { logger } from './logger.js';
 import { jupiterClient } from './clients/jupiter.js';
 import { connection } from "./clients/rpc.js";
@@ -37,8 +37,6 @@ const MIN_TIP_LAMPORTS = config.get('min_tip_lamports');
 const PROFIT_MARGIN_BPS = config.get('profit_margin_bps');
 const MAX_TIP_BPS = config.get('max_tip_bps');
 const LEDGER_PROGRAM_ID = config.get('ledger_program')
-
-logger.info({ LEDGER_PROGRAM_ID }, "ledger program id")
 
 const TXN_FEES_LAMPORTS = 15000;
 
@@ -183,7 +181,7 @@ async function* buildBundle(
         outAmount: inAmount.toString(),
         otherAmountThreshold: inAmount.toString(), // this is not used by jupiter
         swapMode: SwapMode.ExactIn,
-        slippageBps: 0, // this is used to determine the slippage at final swap by jupiter, we can set it larger as we have ledger check
+        slippageBps: 200, // we have ledger to check at the end so this is ok
         priceImpactPct: "1", // does it matter
         routePlan: allRoutesPlan,
       }
@@ -222,19 +220,28 @@ async function* buildBundle(
 
     logger.info({ allRoutesQuote }, "all routes quote")
 
-    const allSwapInstructionsResponse = await jupiterClient.swapInstructionsPost({
-      swapRequest: {
-        userPublicKey: wallet.publicKey.toBase58(),
-        quoteResponse: allRoutesQuote,
-        prioritizationFeeLamports: TXN_FEES_LAMPORTS,
-        useSharedAccounts: false,
-        wrapAndUnwrapSol: true
-      }
-    })
+    let allSwapInstructionsResponse: SwapInstructionsResponse
+    try {
+      allSwapInstructionsResponse = await jupiterClient.swapInstructionsPost({
+        swapRequest: {
+          userPublicKey: wallet.publicKey.toBase58(),
+          quoteResponse: allRoutesQuote,
+          prioritizationFeeLamports: TXN_FEES_LAMPORTS,
+          useSharedAccounts: false,
+          wrapAndUnwrapSol: true
+        }
+      })
+
+    } catch (e) {
+      logger.error(e, "error jupiter swapInstructionsPost")
+    }
+
+    if (!allSwapInstructionsResponse) {
+      continue
+    }
 
     // dedup wrapped sol instruction
     const setupInstructions = removeDuplicateSetupInstructions(allSwapInstructionsResponse.setupInstructions)
-
 
     const randomSeed = new BN(Math.floor(Math.random() * 1000000));
 
