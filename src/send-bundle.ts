@@ -28,15 +28,15 @@ type TradeCSV = {
   txn0Signature: string;
   txn1Signature: string;
   txn2Signature: string;
-  arbSize: string;
-  expectedProfit: string;
-  hop1Dex: string;
-  hop2Dex: string;
-  hop3Dex: string;
-  sourceMint: string;
-  intermediateMint1: string;
-  intermediateMint2: string;
-  tipLamports: string;
+  // arbSize: string;
+  // expectedProfit: string;
+  // hop1Dex: string;
+  // hop2Dex: string;
+  // hop3Dex: string;
+  // sourceMint: string;
+  // intermediateMint1: string;
+  // intermediateMint2: string;
+  // tipLamports: string;
   mempoolEnd: number;
   preSimEnd: number;
   simEnd: number;
@@ -88,17 +88,17 @@ async function processCompletedTrade(uuid: string) {
     txn0Signature,
     txn1Signature,
     txn2Signature,
-    arbSize: trade.arbSize.toString(),
-    expectedProfit: trade.expectedProfit.toString(),
-    hop1Dex: trade.hop1Dex,
-    hop2Dex: trade.hop2Dex,
-    hop3Dex: trade.hop3Dex,
-    sourceMint: trade.sourceMint.toString(),
-    intermediateMint1: trade.intermediateMint1.toString(),
-    intermediateMint2: trade.intermediateMint2
-      ? trade.intermediateMint2.toString()
-      : '',
-    tipLamports: trade.tipLamports.toString(),
+    // arbSize: trade.arbSize.toString(),
+    // expectedProfit: trade.expectedProfit.toString(),
+    // hop1Dex: trade.hop1Dex,
+    // hop2Dex: trade.hop2Dex,
+    // hop3Dex: trade.hop3Dex,
+    // sourceMint: trade.sourceMint.toString(),
+    // intermediateMint1: trade.intermediateMint1.toString(),
+    // intermediateMint2: trade.intermediateMint2
+    //   ? trade.intermediateMint2.toString()
+    //   : '',
+    // tipLamports: trade.tipLamports.toString(),
     mempoolEnd: trade.timings.mempoolEnd,
     preSimEnd: trade.timings.preSimEnd,
     simEnd: trade.timings.simEnd,
@@ -149,15 +149,15 @@ async function sendBundle(bundleIterator: AsyncGenerator<Arb>): Promise<void> {
 
   for await (const {
     bundle,
-    arbSize,
-    expectedProfit,
-    hop1Dex,
-    hop2Dex,
-    hop3Dex,
-    sourceMint,
-    intermediateMint1,
-    intermediateMint2,
-    tipLamports,
+    // arbSize,
+    // expectedProfit,
+    // hop1Dex,
+    // hop2Dex,
+    // hop3Dex,
+    // sourceMint,
+    // intermediateMint1,
+    // intermediateMint2,
+    // tipLamports,
     timings,
   } of bundleIterator) {
     const now = Date.now();
@@ -192,15 +192,15 @@ async function sendBundle(bundleIterator: AsyncGenerator<Arb>): Promise<void> {
           errorType: null,
           errorContent: null,
           landed: false,
-          arbSize,
-          expectedProfit,
-          hop1Dex,
-          hop2Dex,
-          hop3Dex,
-          sourceMint,
-          intermediateMint1,
-          intermediateMint2,
-          tipLamports,
+          // arbSize,
+          // expectedProfit,
+          // hop1Dex,
+          // hop2Dex,
+          // hop3Dex,
+          // sourceMint,
+          // intermediateMint1,
+          // intermediateMint2,
+          // tipLamports,
           timings,
         });
         setTimeout(() => {
@@ -248,17 +248,17 @@ async function sendBundle(bundleIterator: AsyncGenerator<Arb>): Promise<void> {
           txn0Signature,
           txn1Signature,
           txn2Signature,
-          arbSize: arbSize.toString(),
-          expectedProfit: expectedProfit.toString(),
-          hop1Dex: hop1Dex,
-          hop2Dex: hop2Dex,
-          hop3Dex: hop3Dex,
-          sourceMint: sourceMint.toString(),
-          intermediateMint1: intermediateMint1.toString(),
-          intermediateMint2: intermediateMint2
-            ? intermediateMint2.toString()
-            : '',
-          tipLamports: tipLamports.toString(),
+          // arbSize: arbSize.toString(),
+          // expectedProfit: expectedProfit.toString(),
+          // hop1Dex: hop1Dex,
+          // hop2Dex: hop2Dex,
+          // hop3Dex: hop3Dex,
+          // sourceMint: sourceMint.toString(),
+          // intermediateMint1: intermediateMint1.toString(),
+          // intermediateMint2: intermediateMint2
+          //   ? intermediateMint2.toString()
+          //   : '',
+          // tipLamports: tipLamports.toString(),
           mempoolEnd: timings.mempoolEnd,
           preSimEnd: timings.preSimEnd,
           simEnd: timings.simEnd,
