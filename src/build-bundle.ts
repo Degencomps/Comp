@@ -259,6 +259,7 @@ async function* buildBundle(
     // manual construct instruction
     const instructions: TransactionInstruction[] = []
 
+    // todo: rethink compute units
     instructions.push(
       // ...allSwapInstructionsResponse.computeBudgetInstructions.map(deserializeSwapInstruction),
       ...setupInstructions.map(deserializeSwapInstruction),
