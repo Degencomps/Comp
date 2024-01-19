@@ -5,7 +5,7 @@ import {
   VersionedTransaction,
 } from "@solana/web3.js";
 import { ArbIdea } from './calculate-arb.js';
-import { JsbiType, Timings } from './types.js';
+import { Timings } from './types.js';
 import * as fs from 'fs';
 import * as anchor from '@coral-xyz/anchor';
 import { config } from './config.js';
@@ -18,6 +18,7 @@ import { createSyncNativeInstruction, getAssociatedTokenAddressSync } from "@sol
 import { Program } from "@coral-xyz/anchor";
 import { IDL as JitoBomb } from "./clients/types/jito_bomb.js";
 import { BASE_MINTS_OF_INTEREST_B58 } from "./constants.js";
+import bs58 from "bs58";
 
 const TIP_ACCOUNTS = [
   '96gYZGLnJYVFmbjzopPSU6QiEV5fGqZNyN9nmNhvrZU5',
@@ -37,8 +38,7 @@ const MIN_TIP_LAMPORTS = config.get('min_tip_lamports');
 const PROFIT_MARGIN_BPS = config.get('profit_margin_bps');
 const MAX_TIP_BPS = config.get('max_tip_bps');
 const LEDGER_PROGRAM_ID = config.get('ledger_program')
-
-const TXN_FEES_LAMPORTS = 15000;
+const TXN_FEES_LAMPORTS = config.get('txn_fees_lamports');
 
 const MIN_PROFIT_IN_LAMPORTS = MIN_TIP_LAMPORTS + TXN_FEES_LAMPORTS; // in lamports
 
@@ -119,15 +119,6 @@ async function getAddressLookupTableAccounts(
 
 export type Arb = {
   bundle: VersionedTransaction[];
-  arbSize: JsbiType;
-  expectedProfit: JsbiType;
-  hop1Dex: string;
-  hop2Dex: string;
-  hop3Dex: string;
-  sourceMint: PublicKey;
-  intermediateMint1: PublicKey;
-  intermediateMint2: PublicKey | null;
-  tipLamports: JsbiType;
   timings: Timings;
 };
 
@@ -144,9 +135,9 @@ const getAta = (mint: PublicKey, owner: PublicKey) => {
 
 async function* buildBundle(
   arbIdeaIterator: AsyncGenerator<ArbIdea>,
-): AsyncGenerator<void> {
+): AsyncGenerator<Arb> {
   for await (const arbIdea of arbIdeaIterator) {
-    const { timings, trade } = arbIdea;
+    const { txn, timings, trade } = arbIdea;
     const { in: inAmount, out: outAmount, mirroringLegQuote, balancingLeg, balancingLegFirst } = trade;
 
     const mirroringLegRoutePlan = mirroringLegQuote.routePlan
@@ -233,6 +224,7 @@ async function* buildBundle(
       })
 
     } catch (e) {
+      // todo: why jupiter returns error?
       logger.error(e, "error jupiter swapInstructionsPost")
     }
 
@@ -332,321 +324,39 @@ async function* buildBundle(
       instructions: instructions,
     }).compileToV0Message(addressLookupTableAccounts);
 
-    const transaction = new VersionedTransaction(messageV0);
+    const backrunningTx = new VersionedTransaction(messageV0);
 
     // sign and send
-    transaction.sign([wallet.payer]);
+    backrunningTx.sign([wallet.payer]);
 
-    const res = await connection.simulateTransaction(transaction, {
-      replaceRecentBlockhash: false,
-      commitment: "confirmed",
-    })
+    // const res = await connection.simulateTransaction(backrunningTx, {
+    //   replaceRecentBlockhash: false,
+    //   commitment: "confirmed",
+    // })
+    //
+    // logger.info({ simulation: res, timeElapsed: Date.now() - timings.calcArbEnd }, "simulation result")
 
-    logger.info({ simulation: res, timeElapsed: Date.now() - timings.calcArbEnd }, "simulation result")
+    // construct bundle
+    const bundle = [txn, backrunningTx];
+
+    logger.info(
+      `Prepared bundle ${bs58.encode(
+        txn.signatures[0])} in ${Date.now() - timings.calcArbEnd}ms`,
+    )
+
+    yield {
+      bundle,
+      timings: {
+        mempoolEnd: timings.mempoolEnd,
+        preSimEnd: timings.preSimEnd,
+        simEnd: timings.simEnd,
+        postSimEnd: timings.postSimEnd,
+        calcArbEnd: timings.calcArbEnd,
+        buildBundleEnd: Date.now(),
+        bundleSent: 0,
+      },
+    };
   }
-  //   const hop0 = route[0];
-  //   const hop0SourceMint = new PublicKey(
-  //     hop0.fromA ? hop0.market.tokenMintA : hop0.market.tokenMintB,
-  //   );
-  //   const isUSDC = hop0SourceMint.equals(BASE_MINTS_OF_INTEREST.USDC);
-
-  //   const flashloanFee = JSBI.divide(
-  //     JSBI.multiply(arbSize, JSBI.BigInt(SOLEND_FLASHLOAN_FEE_BPS)),
-  //     JSBI.BigInt(10000),
-  //   );
-
-  //   const expectedProfitMinusFee = expectedProfit; //JSBI.subtract(expectedProfit, flashloanFee);
-
-  //   let expectedProfitLamports: JsbiType;
-
-  //   if (isUSDC) {
-  //     expectedProfitLamports = (
-  //       await calculateQuote(
-  //         usdcToSolMkt.id,
-  //         {
-  //           sourceMint: BASE_MINTS_OF_INTEREST.USDC,
-  //           destinationMint: BASE_MINTS_OF_INTEREST.SOL,
-  //           amount: expectedProfitMinusFee,
-  //           swapMode: SwapMode.ExactIn,
-  //         },
-  //         undefined,
-  //         true,
-  //       )
-  //     ).outAmount;
-  //   } else {
-  //     expectedProfitLamports = expectedProfitMinusFee;
-  //   }
-
-  //   if (JSBI.lessThan(expectedProfitLamports, JSBI.BigInt(minProfit))) {
-  //     logger.info(
-  //       `Skipping due to profit (${expectedProfitLamports}) being less than min (${minProfit})`,
-  //     );
-  //     continue;
-  //   }
-
-  //   const tip = JSBI.divide(
-  //     JSBI.multiply(expectedProfitMinusFee, JSBI.BigInt(TIP_PERCENT)),
-  //     JSBI.BigInt(100),
-  //   );
-
-  //   const profitBuffer = JSBI.divide(
-  //     JSBI.multiply(expectedProfitMinusFee, JSBI.BigInt(PROFIT_BUFFER_PERCENT)),
-  //     JSBI.BigInt(100),
-  //   );
-
-  //   const tipLamports = JSBI.divide(
-  //     JSBI.multiply(expectedProfitLamports, JSBI.BigInt(TIP_PERCENT)),
-  //     JSBI.BigInt(100),
-  //   );
-
-  //   // arb size + tip + flashloan fee + profit buffer
-  //   const minOut = JSBI.add(
-  //     JSBI.add(arbSize, tip),
-  //     JSBI.add(flashloanFee, profitBuffer),
-  //   );
-
-  //   const setUpIxns: TransactionInstruction[] = [];
-  //   const setUpSigners: Keypair[] = [payer];
-
-  //   let sourceTokenAccount: PublicKey;
-
-  //   if (!isUSDC) {
-  //     const sourceTokenAccountKeypair = Keypair.generate();
-  //     setUpSigners.push(sourceTokenAccountKeypair);
-
-  //     sourceTokenAccount = sourceTokenAccountKeypair.publicKey;
-
-  //     const createSourceTokenAccountIxn = SystemProgram.createAccount({
-  //       fromPubkey: payer.publicKey,
-  //       newAccountPubkey: sourceTokenAccount,
-  //       space: Token.ACCOUNT_SIZE,
-  //       lamports: MIN_BALANCE_RENT_EXEMPT_TOKEN_ACC,
-  //       programId: Token.TOKEN_PROGRAM_ID,
-  //     });
-  //     setUpIxns.push(createSourceTokenAccountIxn);
-
-  //     const initSourceTokenAccountIxn =
-  //       Token.createInitializeAccountInstruction(
-  //         sourceTokenAccount,
-  //         hop0SourceMint,
-  //         payer.publicKey,
-  //       );
-  //     setUpIxns.push(initSourceTokenAccountIxn);
-  //   } else {
-  //     sourceTokenAccount = USDC_ATA.address;
-  //   }
-
-  //   const intermediateMints: PublicKey[] = [];
-  //   intermediateMints.push(
-  //     new PublicKey(
-  //       hop0.fromA ? hop0.market.tokenMintB : hop0.market.tokenMintA,
-  //     ),
-  //   );
-  //   if (route.length > 2) {
-  //     intermediateMints.push(
-  //       new PublicKey(
-  //         route[1].fromA
-  //           ? route[1].market.tokenMintB
-  //           : route[1].market.tokenMintA,
-  //       ),
-  //     );
-  //   }
-
-  //   intermediateMints.forEach((mint) => {
-  //     const intermediateTokenAccount = getAta(mint, payer.publicKey);
-
-  //     const createIntermediateTokenAccountIxn =
-  //       Token.createAssociatedTokenAccountIdempotentInstruction(
-  //         payer.publicKey,
-  //         intermediateTokenAccount,
-  //         payer.publicKey,
-  //         mint,
-  //       );
-  //     setUpIxns.push(createIntermediateTokenAccountIxn);
-  //   });
-
-  //   const legs = {
-  //     chain: {
-  //       swapLegs: [],
-  //     },
-  //   };
-  //   const allSwapAccounts: AccountMeta[] = [];
-
-  //   const legAndAccountsPromises: Promise<SwapLegAndAccounts>[] = [];
-
-  //   route.forEach(async (hop, i) => {
-  //     const sourceMint = new PublicKey(
-  //       hop.fromA ? hop.market.tokenMintA : hop.market.tokenMintB,
-  //     );
-  //     const destinationMint = new PublicKey(
-  //       hop.fromA ? hop.market.tokenMintB : hop.market.tokenMintA,
-  //     );
-  //     const userSourceTokenAccount =
-  //       i === 0 ? sourceTokenAccount : getAta(sourceMint, payer.publicKey);
-  //     const userDestinationTokenAccount =
-  //       i === route.length - 1
-  //         ? sourceTokenAccount
-  //         : getAta(destinationMint, payer.publicKey);
-  //     const legAndAccountsPromise = calculateSwapLegAndAccounts(
-  //       hop.market.id,
-  //       {
-  //         sourceMint,
-  //         destinationMint,
-  //         userSourceTokenAccount,
-  //         userDestinationTokenAccount,
-  //         userTransferAuthority: payer.publicKey,
-  //         amount: i === 0 ? arbSize : JSBI.BigInt(1),
-  //         swapMode: SwapMode.ExactIn,
-  //       },
-  //       undefined,
-  //       true,
-  //     );
-  //     legAndAccountsPromises.push(legAndAccountsPromise);
-  //   });
-
-  //   const legAndAccounts = await Promise.all(legAndAccountsPromises);
-
-  //   for (const [leg, accounts] of legAndAccounts) {
-  //     legs.chain.swapLegs.push(leg);
-  //     allSwapAccounts.push(...accounts);
-  //   }
-
-  //   const instructionsMain: TransactionInstruction[] = [];
-
-  //   const solendReserve = isUSDC
-  //     ? SOLEND_TURBO_USDC_RESERVE
-  //     : SOLEND_TURBO_SOL_RESERVE;
-
-  //   const solendLiquidity = isUSDC
-  //     ? SOLEND_TURBO_USDC_LIQUIDITY
-  //     : SOLEND_TURBO_SOL_LIQUIDITY;
-
-  //   const flashBorrowIxn = flashBorrowReserveLiquidityInstruction(
-  //     new BN(arbSize.toString()),
-  //     solendLiquidity,
-  //     sourceTokenAccount,
-  //     solendReserve,
-  //     SOLEND_TURBO_POOL,
-  //     SOLEND_PRODUCTION_PROGRAM_ID,
-  //   );
-
-  //   instructionsMain.push(flashBorrowIxn);
-
-  //   const jupiterIxn = jupiterProgram.instruction.route(
-  //     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  //     legs as any,
-  //     new BN(arbSize.toString()),
-  //     new BN(minOut.toString()),
-  //     0,
-  //     0,
-  //     {
-  //       accounts: {
-  //         tokenProgram: Token.TOKEN_PROGRAM_ID,
-  //         userTransferAuthority: payer.publicKey,
-  //         destinationTokenAccount: sourceTokenAccount,
-  //       },
-  //       remainingAccounts: allSwapAccounts,
-  //       signers: [payer],
-  //     },
-  //   );
-
-  //   instructionsMain.push(jupiterIxn);
-
-  //   const solendFeeReceiver = isUSDC
-  //     ? SOLEND_TURBO_USDC_FEE_RECEIVER
-  //     : SOLEND_TURBO_SOL_FEE_RECEIVER;
-
-  //   const flashRepayIxn = flashRepayReserveLiquidityInstruction(
-  //     new BN(arbSize.toString()), // liquidityAmount
-  //     0, // borrowInstructionIndex
-  //     sourceTokenAccount, // sourceLiquidity
-  //     solendLiquidity, // destinationLiquidity
-  //     solendFeeReceiver, // reserveLiquidityFeeReceiver
-  //     sourceTokenAccount, // hostFeeReceiver
-  //     solendReserve, // reserve
-  //     SOLEND_TURBO_POOL, // lendingMarket
-  //     payer.publicKey, // userTransferAuthority
-  //     SOLEND_PRODUCTION_PROGRAM_ID, // lendingProgramId
-  //   );
-
-  //   instructionsMain.push(flashRepayIxn);
-
-  //   if (!isUSDC) {
-  //     const closeSolTokenAcc = Token.createCloseAccountInstruction(
-  //       sourceTokenAccount,
-  //       payer.publicKey,
-  //       payer.publicKey,
-  //     );
-  //     instructionsMain.push(closeSolTokenAcc);
-  //   }
-
-  //   const tipIxn = SystemProgram.transfer({
-  //     fromPubkey: payer.publicKey,
-  //     toPubkey: getRandomTipAccount(),
-  //     lamports: BigInt(tipLamports.toString()),
-  //   });
-  //   instructionsMain.push(tipIxn);
-
-  //   const messageSetUp = new TransactionMessage({
-  //     payerKey: payer.publicKey,
-  //     recentBlockhash: txn.message.recentBlockhash,
-  //     instructions: setUpIxns,
-  //   }).compileToV0Message();
-  //   const txSetUp = new VersionedTransaction(messageSetUp);
-  //   txSetUp.sign(setUpSigners);
-
-  //   const addressesMain: PublicKey[] = [];
-  //   instructionsMain.forEach((ixn) => {
-  //     ixn.keys.forEach((key) => {
-  //       addressesMain.push(key.pubkey);
-  //     });
-  //   });
-  //   const lookupTablesMain =
-  //     lookupTableProvider.computeIdealLookupTablesForAddresses(addressesMain);
-  //   const messageMain = new TransactionMessage({
-  //     payerKey: payer.publicKey,
-  //     recentBlockhash: txn.message.recentBlockhash,
-  //     instructions: instructionsMain,
-  //   }).compileToV0Message(lookupTablesMain);
-  //   const txMain = new VersionedTransaction(messageMain);
-  //   try {
-  //     const serializedMsg = txMain.serialize();
-  //     if (serializedMsg.length > 1232) {
-  //       logger.error('tx too big');
-  //       continue;
-  //     }
-  //     txMain.sign([payer]);
-  //   } catch (e) {
-  //     logger.error(e, 'error signing txMain');
-  //     continue;
-  //   }
-
-  //   const bundle = [txn, txSetUp, txMain];
-
-  //   yield {
-  //     bundle,
-  //     arbSize,
-  //     expectedProfit,
-  //     hop1Dex: route[0].market.dexLabel,
-  //     hop2Dex: route[1].market.dexLabel,
-  //     hop3Dex: route[2] ? route[2].market.dexLabel : '',
-  //     sourceMint: hop0SourceMint,
-  //     intermediateMint1: intermediateMints[0],
-  //     intermediateMint2: intermediateMints[1] ? intermediateMints[1] : null,
-  //     tipLamports,
-  //     timings: {
-  //       mempoolEnd: timings.mempoolEnd,
-  //       preSimEnd: timings.preSimEnd,
-  //       simEnd: timings.simEnd,
-  //       postSimEnd: timings.postSimEnd,
-  //       calcArbEnd: timings.calcArbEnd,
-  //       buildBundleEnd: Date.now(),
-  //       bundleSent: 0,
-  //     },
-  //   };
-  // }
-
-  yield
 }
 
 export { buildBundle };

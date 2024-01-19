@@ -1,5 +1,6 @@
 import convict from 'convict';
 import * as dotenv from 'dotenv';
+
 dotenv.config();
 
 const config = convict({
@@ -78,6 +79,11 @@ const config = convict({
     format: String,
     default: "6688eXUZ2nrEod2ZrXyoD446C4Na9mMuioXPYawKT2bF",
     env: 'LEDGER_PROGRAM',
+  },
+  txn_fees_lamports: {
+    format: Number,
+    default: 15000,
+    env: 'TXN_FEES_LAMPORTS',
   },
 });
 

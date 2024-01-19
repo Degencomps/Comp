@@ -218,6 +218,7 @@ async function calculateJupiterQuotes(balancingLeg: SerializableLegFixed, mirror
   // get the most profitable quote only
   // filter out trades that are too small
   // build and sign a bundle for that quote
+  // inAmount should check payer balance
 
   const response: AmmCalcWorkerResultMessage = {
     type: 'calculateJupiterQuotes',
