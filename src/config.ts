@@ -62,7 +62,7 @@ const config = convict({
   },
   min_tip_lamports: {
     format: Number,
-    default: 10000,
+    default: 1000,
     env: 'MIN_TIP_LAMPORTS',
   },
   profit_margin_bps: {
