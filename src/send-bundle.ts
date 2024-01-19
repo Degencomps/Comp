@@ -117,7 +117,7 @@ async function sendBundle(bundleIterator: AsyncGenerator<Arb>): Promise<void> {
       const isAccepted = bundleResult.accepted;
       const isRejected = bundleResult.rejected;
       if (isAccepted) {
-        logger.info(
+        logger.debug(
           `Bundle ${bundleId} accepted in slot ${bundleResult.accepted!.slot}`,
         );
         if (bundlesInTransit.has(bundleId)) {
@@ -125,7 +125,7 @@ async function sendBundle(bundleIterator: AsyncGenerator<Arb>): Promise<void> {
         }
       }
       if (isRejected) {
-        logger.info(
+        logger.debug(
           `Bundle ${bundleId} rejected`,
         );
         // logger.info(bundleResult.rejected, `Bundle ${bundleId} rejected:`);

@@ -209,7 +209,7 @@ async function* buildBundle(
       }
     }
 
-    logger.info({ allRoutesQuote }, "all routes quote")
+    logger.debug({ allRoutesQuote }, "all routes quote")
 
     let allSwapInstructionsResponse: SwapInstructionsResponse
     try {
@@ -225,7 +225,7 @@ async function* buildBundle(
 
     } catch (e) {
       // todo: why jupiter returns error?
-      logger.error(e, "error jupiter swapInstructionsPost")
+      logger.warn(e, "error jupiter swapInstructionsPost")
     }
 
     if (!allSwapInstructionsResponse) {
