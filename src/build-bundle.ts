@@ -260,7 +260,7 @@ async function* buildBundle(
     const instructions: TransactionInstruction[] = []
 
     instructions.push(
-      ...allSwapInstructionsResponse.computeBudgetInstructions.map(deserializeSwapInstruction),
+      // ...allSwapInstructionsResponse.computeBudgetInstructions.map(deserializeSwapInstruction),
       ...setupInstructions.map(deserializeSwapInstruction),
     )
 
@@ -329,12 +329,12 @@ async function* buildBundle(
     // sign and send
     backrunningTx.sign([wallet.payer]);
 
-    // const res = await connection.simulateTransaction(backrunningTx, {
-    //   replaceRecentBlockhash: false,
-    //   commitment: "confirmed",
-    // })
-    //
-    // logger.info({ simulation: res, timeElapsed: Date.now() - timings.calcArbEnd }, "simulation result")
+    const res = await connection.simulateTransaction(backrunningTx, {
+      replaceRecentBlockhash: false,
+      commitment: "confirmed",
+    })
+
+    logger.info({ simulation: res, timeElapsed: Date.now() - timings.calcArbEnd }, "simulation result")
 
     // construct bundle
     const bundle = [txn, backrunningTx];
