@@ -74,6 +74,11 @@ const config = convict({
     default: 1000,
     env: 'MAX_TIP_BPS',
   },
+  ledger_program: {
+    format: Number,
+    default: "6688eXUZ2nrEod2ZrXyoD446C4Na9mMuioXPYawKT2bF",
+    env: 'LEDGER_PROGRAM',
+  },
 });
 
 config.validate({ allowed: 'strict' });

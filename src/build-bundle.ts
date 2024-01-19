@@ -16,7 +16,7 @@ import { connection } from "./clients/rpc.js";
 import BN from "bn.js";
 import { getAssociatedTokenAddressSync } from "@solana/spl-token-3";
 import { Program } from "@coral-xyz/anchor";
-import { JitoBomb } from "./clients/types/jito_bomb.js";
+import { IDL as JitoBomb } from "./clients/types/jito_bomb.js";
 import { BASE_MINTS_OF_INTEREST_B58 } from "./constants.js";
 
 const TIP_ACCOUNTS = [
@@ -36,7 +36,7 @@ const getRandomTipAccount = () =>
 const MIN_TIP_LAMPORTS = config.get('min_tip_lamports');
 const PROFIT_MARGIN_BPS = config.get('profit_margin_bps');
 const MAX_TIP_BPS = config.get('max_tip_bps');
-
+const LEDGER_PROGRAM_ID = config.get('ledger_program')
 
 const TXN_FEES_LAMPORTS = 15000;
 
@@ -52,7 +52,8 @@ const payer = Keypair.fromSecretKey(
 );
 
 const wallet = new anchor.Wallet(payer);
-const ledgerProgram = anchor.workspace.JitoBomb as Program<JitoBomb>;
+const provider = new anchor.AnchorProvider(connection, wallet, {});
+const ledgerProgram = new Program(JitoBomb, LEDGER_PROGRAM_ID, provider)
 
 const LAMPORTS_PER_USDC_UNITS = 10; // 1 soL = $100 usdc; 1000_000_000 lamports = 100_000_000 usdc units
 
@@ -236,6 +237,8 @@ async function* buildBundle(
       }
     }
 
+    logger.info({ allRoutesQuote }, "all routes quote")
+
     const allSwapInstructionsResponse = await jupiterClient.swapInstructionsPost({
       swapRequest: {
         userPublicKey: wallet.publicKey.toBase58(),
@@ -253,6 +256,7 @@ async function* buildBundle(
     const instructions: TransactionInstruction[] = []
 
     const randomSeed = new BN(Math.floor(Math.random() * 1000000));
+
     // todo: to optimize this
     const ledgerAccount = PublicKey.findProgramAddressSync(
       [Buffer.from("ledger"), wallet.publicKey.toBuffer(), randomSeed.toArrayLike(Buffer, "le", 8)],
@@ -315,8 +319,6 @@ async function* buildBundle(
     if (allSwapInstructionsResponse.cleanupInstruction) {
       instructions.push(deserializeSwapInstruction(allSwapInstructionsResponse.cleanupInstruction))
     }
-
-    // logger.info(JSON.stringify(instructions, null, 2))
 
     const addressLookupTableAccounts: AddressLookupTableAccount[] = [];
     addressLookupTableAccounts.push(
