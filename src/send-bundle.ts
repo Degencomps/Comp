@@ -125,18 +125,21 @@ async function sendBundle(bundleIterator: AsyncGenerator<Arb>): Promise<void> {
         }
       }
       if (isRejected) {
-        logger.info(bundleResult.rejected, `Bundle ${bundleId} rejected:`);
-        if (bundlesInTransit.has(bundleId)) {
-          const trade: Trade = bundlesInTransit.get(bundleId)!;
-          trade.rejected = true;
-          const rejectedEntry = Object.entries(bundleResult.rejected!).find(
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            ([_, value]) => value !== undefined,
-          );
-          const [errorType, errorContent] = rejectedEntry!;
-          trade.errorType = errorType;
-          trade.errorContent = JSON.stringify(errorContent);
-        }
+        logger.info(
+          `Bundle ${bundleId} rejected`,
+        );
+        // logger.info(bundleResult.rejected, `Bundle ${bundleId} rejected:`);
+        // if (bundlesInTransit.has(bundleId)) {
+        //   const trade: Trade = bundlesInTransit.get(bundleId)!;
+        //   trade.rejected = true;
+        //   const rejectedEntry = Object.entries(bundleResult.rejected!).find(
+        //     // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        //     ([_, value]) => value !== undefined,
+        //   );
+        //   const [errorType, errorContent] = rejectedEntry!;
+        //   trade.errorType = errorType;
+        //   trade.errorContent = JSON.stringify(errorContent);
+        // }
       }
     },
     (error) => {
