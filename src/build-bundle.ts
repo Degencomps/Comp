@@ -38,7 +38,7 @@ const MIN_TIP_LAMPORTS = config.get('min_tip_lamports');
 const PROFIT_MARGIN_BPS = config.get('profit_margin_bps');
 const MAX_TIP_BPS = config.get('max_tip_bps');
 const LEDGER_PROGRAM_ID = config.get('ledger_program')
-const TXN_FEES_LAMPORTS = config.get('txn_fees_lamports');
+const TXN_FEES_LAMPORTS = config.get('txn_fees_lamports'); // todo: do we even need this?
 
 const MIN_PROFIT_IN_LAMPORTS = MIN_TIP_LAMPORTS + TXN_FEES_LAMPORTS; // in lamports
 
@@ -218,7 +218,7 @@ async function* buildBundle(
         swapRequest: {
           userPublicKey: wallet.publicKey.toBase58(),
           quoteResponse: allRoutesQuote,
-          prioritizationFeeLamports: TXN_FEES_LAMPORTS,
+          prioritizationFeeLamports: TXN_FEES_LAMPORTS, // todo: note the compute units ixs are removed below
           useSharedAccounts: false,
           wrapAndUnwrapSol: true
         }
