@@ -259,7 +259,7 @@ async function* buildBundle(
     // manual construct instruction
     const instructions: TransactionInstruction[] = []
 
-    // todo: rethink compute units
+    // todo: rethink compute units, need to add to calculate minimum profit
     instructions.push(
       // ...allSwapInstructionsResponse.computeBudgetInstructions.map(deserializeSwapInstruction),
       ...setupInstructions.map(deserializeSwapInstruction),
@@ -330,12 +330,12 @@ async function* buildBundle(
     // sign and send
     backrunningTx.sign([wallet.payer]);
 
-    const res = await connection.simulateTransaction(backrunningTx, {
-      replaceRecentBlockhash: false,
-      commitment: "confirmed",
-    })
-
-    logger.info({ simulation: res, timeElapsed: Date.now() - timings.calcArbEnd }, "simulation result")
+    // const res = await connection.simulateTransaction(backrunningTx, {
+    //   replaceRecentBlockhash: false,
+    //   commitment: "confirmed",
+    // })
+    //
+    // logger.info({ simulation: res, timeElapsed: Date.now() - timings.calcArbEnd }, "simulation result")
 
     // construct bundle
     const bundle = [txn, backrunningTx];
