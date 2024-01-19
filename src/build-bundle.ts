@@ -38,6 +38,8 @@ const PROFIT_MARGIN_BPS = config.get('profit_margin_bps');
 const MAX_TIP_BPS = config.get('max_tip_bps');
 const LEDGER_PROGRAM_ID = config.get('ledger_program')
 
+logger.info({ LEDGER_PROGRAM_ID }, "ledger program id")
+
 const TXN_FEES_LAMPORTS = 15000;
 
 const MIN_PROFIT_IN_LAMPORTS = MIN_TIP_LAMPORTS + TXN_FEES_LAMPORTS; // in lamports
@@ -52,31 +54,12 @@ const payer = Keypair.fromSecretKey(
 );
 
 const wallet = new anchor.Wallet(payer);
-const provider = new anchor.AnchorProvider(connection, wallet, {});
+const provider = new anchor.AnchorProvider(connection, wallet, {
+  commitment: "confirmed",
+});
 const ledgerProgram = new Program(JitoBomb, LEDGER_PROGRAM_ID, provider)
 
 const LAMPORTS_PER_USDC_UNITS = 10; // 1 soL = $100 usdc; 1000_000_000 lamports = 100_000_000 usdc units
-
-// // market to calculate usdc profit in sol
-// const usdcToSolMkt = getMarketsForPair(
-//   BASE_MINTS_OF_INTEREST.SOL.toBase58(),
-//   BASE_MINTS_OF_INTEREST.USDC.toBase58(),
-// ).filter(
-//   (market) =>
-//     // hardcode market to orca 0.05% fee SOL/USDC
-//     market.id === '7qbRF6YsyGuLUVs6Y1q64bdVrfe4ZcUUz1JRdoVNUJnm',
-// )[0];
-
-// if (!usdcToSolMkt) {
-//   throw new Error('No USDC/SOL market found');
-// }
-
-// const USDC_ATA = await Token.getOrCreateAssociatedTokenAccount(
-//   connection,
-//   payer,
-//   BASE_MINTS_OF_INTEREST.USDC,
-//   payer.publicKey,
-// );
 
 function removeDuplicateSetupInstructions(instructions: Instruction[]) {
   const setupInstructions: Instruction[] = []
