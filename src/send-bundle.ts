@@ -27,7 +27,6 @@ type TradeCSV = {
   errorContent: string | null;
   txn0Signature: string;
   txn1Signature: string;
-  txn2Signature: string;
   // arbSize: string;
   // expectedProfit: string;
   // hop1Dex: string;
@@ -59,21 +58,21 @@ async function processCompletedTrade(uuid: string) {
 
   const txn0Signature = bs58.encode(trade.bundle[0].signatures[0]);
   const txn1Signature = bs58.encode(trade.bundle[1].signatures[0]);
-  const txn2Signature = bs58.encode(trade.bundle[2].signatures[0]);
 
-  const txn2 = await connection
-    .getTransaction(txn2Signature, {
+  const txn1 = await connection
+    .getTransaction(txn1Signature, {
       commitment: 'confirmed',
       maxSupportedTransactionVersion: 10,
     })
     .catch(() => {
       logger.info(
-        `getTransaction failed. Assuming txn2 ${txn2Signature} did not land`,
+        `getTransaction failed. Assuming txn1 ${txn1Signature} did not land`,
       );
       return null;
     });
 
-  if (txn2 !== null) {
+  if (txn1 !== null) {
+    logger.info(`Tx ${txn1Signature} landed`);
     trade.landed = true;
   }
 
@@ -87,7 +86,6 @@ async function processCompletedTrade(uuid: string) {
     errorContent: trade.errorContent,
     txn0Signature,
     txn1Signature,
-    txn2Signature,
     // arbSize: trade.arbSize.toString(),
     // expectedProfit: trade.expectedProfit.toString(),
     // hop1Dex: trade.hop1Dex,
@@ -236,7 +234,6 @@ async function sendBundle(bundleIterator: AsyncGenerator<Arb>): Promise<void> {
         }
         const txn0Signature = bs58.encode(bundle[0].signatures[0]);
         const txn1Signature = bs58.encode(bundle[1].signatures[0]);
-        const txn2Signature = bs58.encode(bundle[2].signatures[0]);
         const tradeCsv: TradeCSV = {
           timestamp: Date.now(),
           uuid: '',
@@ -247,7 +244,6 @@ async function sendBundle(bundleIterator: AsyncGenerator<Arb>): Promise<void> {
           errorContent: JSON.stringify(error),
           txn0Signature,
           txn1Signature,
-          txn2Signature,
           // arbSize: arbSize.toString(),
           // expectedProfit: expectedProfit.toString(),
           // hop1Dex: hop1Dex,
