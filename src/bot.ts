@@ -1,4 +1,4 @@
-// import { buildBundle } from './build-bundle.js';
+import { buildBundle } from './build-bundle.js';
 // import { calculateArb } from './calculate-arb.js';
 import { calculateArb } from "./calculate-arb.js";
 import { mempool } from './mempool.js';
@@ -22,13 +22,13 @@ const backrunnableTrades = postSimulateFilter(simulations);
 //find potential arb opportunities
 const arbIdeas = calculateArb(backrunnableTrades);
 
-for await (const _idea of arbIdeas) {
-  //logger.info(idea.expectedProfit.toString());
-}
 
 // build the bundle to submit
-// buildBundle(arbIdeas);
-//const bundles = buildBundle(arbIdeas);
+const bundles = buildBundle(arbIdeas);
+
+for await (const _bundle of bundles) {
+  // console.log(_bundle);
+}
 
 // submit bundles
 //await sendBundle(bundles);

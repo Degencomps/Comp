@@ -64,10 +64,15 @@ const config = convict({
     default: 10000,
     env: 'MIN_TIP_LAMPORTS',
   },
-  tip_percent: {
+  profit_margin_bps: {
     format: Number,
-    default: 50,
-    env: 'TIP_PERCENT',
+    default: 2000,
+    env: 'PROFIT_MARGIN_BPS',
+  },
+  max_tip_bps: {
+    format: Number,
+    default: 1000,
+    env: 'MAX_TIP_BPS',
   },
 });
 

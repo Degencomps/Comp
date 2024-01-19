@@ -1,8 +1,12 @@
-import { PublicKey, VersionedTransaction } from '@solana/web3.js';
+import {
+  PublicKey,
+  VersionedTransaction,
+} from "@solana/web3.js";
 import { ArbIdea } from './calculate-arb.js';
 import { JsbiType, Timings } from './types.js';
 // import * as fs from 'fs';
 // import { config } from './config.js';
+import { QuoteResponse, RoutePlanStep, SwapMode } from "@jup-ag/api";
 // import * as Token from '@solana/spl-token-3';
 // import { connection } from './clients/rpc.js';
 // import { BN } from 'bn.js';
@@ -11,6 +15,9 @@ import { JsbiType, Timings } from './types.js';
 // import jsbi from 'jsbi';
 // import { defaultImport } from 'default-import';
 // import * as anchor from '@coral-xyz/anchor';
+// import { Program } from "@coral-xyz/anchor";
+// import { JitoBomb } from "./clients/types/jito_bomb";
+import { logger } from "./logger";
 // import { logger } from './logger.js';
 // import { Timings } from './types.js';
 // import {
@@ -53,11 +60,12 @@ import { JsbiType, Timings } from './types.js';
 
 // const getRandomTipAccount = () =>
 //   TIP_ACCOUNTS[Math.floor(Math.random() * TIP_ACCOUNTS.length)];
-
+//
 // const MIN_TIP_LAMPORTS = config.get('min_tip_lamports');
-// const TIP_PERCENT = config.get('tip_percent');
-
-// // three signatrues (up to two for set up txn, one for main tx)
+// const PROFIT_MARGIN_BPS = config.get('profit_margin_bps');
+//
+//
+// // // three signatrues (up to two for set up txn, one for main tx)
 // const TXN_FEES_LAMPORTS = 15000;
 
 // const minProfit = MIN_TIP_LAMPORTS + TXN_FEES_LAMPORTS;
@@ -72,8 +80,9 @@ import { JsbiType, Timings } from './types.js';
 // );
 
 // const wallet = new anchor.Wallet(payer);
-// const provider = new anchor.AnchorProvider(connection, wallet, {});
-// const jupiterProgram = new anchor.Program(IDL, JUPITER_PROGRAM_ID, provider);
+// const ledgerProgram = anchor.workspace.JitoBomb as Program<JitoBomb>;
+//
+// const LAMPORTS_PER_USDC_UNITS = 10; // 1 soL = $100 usdc; 1000_000_000 lamports = 100_000_000 usdc units
 
 // // market to calculate usdc profit in sol
 // const usdcToSolMkt = getMarketsForPair(
@@ -95,6 +104,64 @@ import { JsbiType, Timings } from './types.js';
 //   BASE_MINTS_OF_INTEREST.USDC,
 //   payer.publicKey,
 // );
+
+// function removeDuplicateSetupInstructions(instructions: Instruction[]) {
+//   const setupInstructions: Instruction[] = []
+//   let isWrappedSol = false;
+//   let isTransferSol = false;
+//   for (const instruction of instructions) {
+//     if (instruction.programId === "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL") {
+//       setupInstructions.push(instruction)
+//       continue
+//     }
+//
+//     if (instruction.programId === "11111111111111111111111111111111" && !isWrappedSol) {
+//       setupInstructions.push(instruction)
+//       isWrappedSol = true
+//       continue
+//     }
+//
+//     if (instruction.programId === "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA" && !isTransferSol) {
+//       setupInstructions.push(instruction)
+//       isTransferSol = true
+//     }
+//   }
+//
+//   return setupInstructions
+// }
+
+// function deserializeSwapInstruction(instruction: Instruction) {
+//   return new TransactionInstruction({
+//     programId: new PublicKey(instruction.programId),
+//     keys: instruction.accounts.map((key) => ({
+//       pubkey: new PublicKey(key.pubkey),
+//       isSigner: key.isSigner,
+//       isWritable: key.isWritable,
+//     })), data: Buffer.from(instruction.data, "base64"),
+//   });
+// }
+
+// async function getAddressLookupTableAccounts(
+//   keys: string[]
+// ): Promise<AddressLookupTableAccount[]> {
+//   const addressLookupTableAccountInfos =
+//     await connection.getMultipleAccountsInfo(
+//       keys.map((key) => new PublicKey(key))
+//     );
+//
+//   return addressLookupTableAccountInfos.reduce((acc, accountInfo, index) => {
+//     const addressLookupTableAddress = keys[index];
+//     if (accountInfo) {
+//       const addressLookupTableAccount = new AddressLookupTableAccount({
+//         key: new PublicKey(addressLookupTableAddress),
+//         state: AddressLookupTableAccount.deserialize(accountInfo.data),
+//       });
+//       acc.push(addressLookupTableAccount);
+//     }
+//
+//     return acc;
+//   }, new Array<AddressLookupTableAccount>());
+// }
 
 export type Arb = {
   bundle: VersionedTransaction[];
@@ -124,8 +191,88 @@ export type Arb = {
 async function* buildBundle(
   arbIdeaIterator: AsyncGenerator<ArbIdea>,
 ): AsyncGenerator<void> {
-  for await (const { arbSize, expectedProfit } of arbIdeaIterator) {
-    console.log(arbSize, expectedProfit);
+  for await (const arbIdea of arbIdeaIterator) {
+    const { timings, trade } = arbIdea;
+    const { in: inAmount, out: outAmount, mirroringLegQuote, balancingLeg, balancingLegFirst } = trade;
+
+    const mirroringLegRoutePlan = mirroringLegQuote.routePlan
+
+    let allRoutesQuote: QuoteResponse
+    if (balancingLegFirst) {
+      const allRoutesPlan: RoutePlanStep[] = []
+
+      const balancingLegRoutePlan: RoutePlanStep = {
+        swapInfo: {
+          ammKey: balancingLeg.marketId,
+          label: balancingLeg.dex,
+          inputMint: balancingLeg.sourceMint,
+          outputMint: balancingLeg.destinationMint,
+          inAmount: inAmount.toString(),
+          outAmount: outAmount.toString(),
+          feeAmount: "0",
+          feeMint: balancingLeg.sourceMint,
+        },
+        percent: 100
+      }
+      allRoutesPlan.push(balancingLegRoutePlan)
+      allRoutesPlan.push(...mirroringLegRoutePlan)
+
+      allRoutesQuote = {
+        inputMint: balancingLeg.sourceMint,
+        outputMint: balancingLeg.sourceMint,
+        inAmount: inAmount.toString(),
+        outAmount: inAmount.toString(),
+        otherAmountThreshold: inAmount.toString(), // this is not used by jupiter
+        swapMode: SwapMode.ExactIn,
+        slippageBps: 0, // this is used to determine the slippage at final swap by jupiter, we can set it larger as we have ledger check
+        priceImpactPct: "1", // does it matter
+        routePlan: allRoutesPlan,
+      }
+
+    } else {
+      const allRoutesPlan: RoutePlanStep[] = []
+
+      const balancingLegRoutePlan: RoutePlanStep = {
+        swapInfo: {
+          ammKey: balancingLeg.marketId,
+          label: balancingLeg.dex,
+          inputMint: balancingLeg.sourceMint,
+          outputMint: balancingLeg.destinationMint,
+          inAmount: inAmount.toString(), // this doesn't matter when it is second leg as jupiter ledger will replace it with the delta
+          outAmount: outAmount.toString(),
+          feeAmount: "0",
+          feeMint: balancingLeg.destinationMint,
+        },
+        percent: 100
+      }
+      allRoutesPlan.push(...mirroringLegRoutePlan)
+      allRoutesPlan.push(balancingLegRoutePlan)
+
+      allRoutesQuote = {
+        inputMint: balancingLeg.destinationMint,
+        outputMint: balancingLeg.destinationMint,
+        inAmount: inAmount.toString(),
+        outAmount: inAmount.toString(),
+        otherAmountThreshold: inAmount.toString(), // this is not used by jupiter
+        swapMode: SwapMode.ExactIn,
+        slippageBps: 0, // this is used to determine the slippage at final swap by jupiter, we can set it larger as we have ledger check
+        priceImpactPct: "1", // does it matter
+        routePlan: allRoutesPlan,
+      }
+    }
+
+    logger.info({ allRoutesQuote: allRoutesQuote, timeElapsed: Date.now() - timings.calcArbEnd }, 'allRoutesQuote')
+
+    // const allSwapInstructionsResponse = await jupiterClient.swapInstructionsPost({
+    //   swapRequest: {
+    //     userPublicKey: wallet.publicKey.toBase58(),
+    //     quoteResponse: allRoutesQuote,
+    //     prioritizationFeeLamports: TXN_FEES_LAMPORTS,
+    //     useSharedAccounts: false,
+    //     wrapAndUnwrapSol: true
+    //   }
+    // })
+
   }
   //   const hop0 = route[0];
   //   const hop0SourceMint = new PublicKey(
