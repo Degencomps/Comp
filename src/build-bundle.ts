@@ -1,88 +1,60 @@
 import {
-  PublicKey,
+  AddressLookupTableAccount,
+  Keypair,
+  PublicKey, SystemProgram, SYSVAR_INSTRUCTIONS_PUBKEY, TransactionInstruction, TransactionMessage,
   VersionedTransaction,
 } from "@solana/web3.js";
 import { ArbIdea } from './calculate-arb.js';
 import { JsbiType, Timings } from './types.js';
-// import * as fs from 'fs';
-// import { config } from './config.js';
-import { QuoteResponse, RoutePlanStep, SwapMode } from "@jup-ag/api";
-// import * as Token from '@solana/spl-token-3';
-// import { connection } from './clients/rpc.js';
-// import { BN } from 'bn.js';
-// import { IDL, JUPITER_PROGRAM_ID, SwapMode } from '@jup-ag/common';
+import * as fs from 'fs';
+import * as anchor from '@coral-xyz/anchor';
+import { config } from './config.js';
+import { Instruction, QuoteResponse, RoutePlanStep, SwapMode } from "@jup-ag/api";
+import { logger } from './logger.js';
+import { jupiterClient } from './clients/jupiter.js';
+import { connection } from "./clients/rpc.js";
+import BN from "bn.js";
+import { getAssociatedTokenAddressSync } from "@solana/spl-token-3";
+import { Program } from "@coral-xyz/anchor";
+import { JitoBomb } from "./clients/types/jito_bomb.js";
+import { BASE_MINTS_OF_INTEREST_B58 } from "./constants.js";
 
-// import jsbi from 'jsbi';
-// import { defaultImport } from 'default-import';
-// import * as anchor from '@coral-xyz/anchor';
-// import { Program } from "@coral-xyz/anchor";
-// import { JitoBomb } from "./clients/types/jito_bomb";
-import { logger } from "./logger";
-// import { logger } from './logger.js';
-// import { Timings } from './types.js';
-// import {
-//   calculateQuote,
-//   calculateSwapLegAndAccounts,
-//   getMarketsForPair,
-// } from './markets/index.js';
-// import { lookupTableProvider } from './lookup-table-provider.js';
-// import {
-//   SOLEND_PRODUCTION_PROGRAM_ID,
-//   flashBorrowReserveLiquidityInstruction,
-//   flashRepayReserveLiquidityInstruction,
-// } from '@solendprotocol/solend-sdk';
-// import {
-//   BASE_MINTS_OF_INTEREST,
-//   SOLEND_FLASHLOAN_FEE_BPS,
-//   SOLEND_TURBO_POOL,
-//   SOLEND_TURBO_SOL_FEE_RECEIVER,
-//   SOLEND_TURBO_SOL_LIQUIDITY,
-//   SOLEND_TURBO_SOL_RESERVE,
-//   SOLEND_TURBO_USDC_FEE_RECEIVER,
-//   SOLEND_TURBO_USDC_LIQUIDITY,
-//   SOLEND_TURBO_USDC_RESERVE,
-// } from './constants.js';
-// import { SwapLegAndAccounts } from '@jup-ag/core/dist/lib/amm.js';
-// const JSBI = defaultImport(jsbi);
+const TIP_ACCOUNTS = [
+  '96gYZGLnJYVFmbjzopPSU6QiEV5fGqZNyN9nmNhvrZU5',
+  'HFqU5x63VTqvQss8hp11i4wVV8bD44PvwucfZ2bU7gRe',
+  'Cw8CFyM9FkoMi7K7Crf6HNQqf4uEMzpKw6QNghXLvLkY',
+  'ADaUMid9yfUytqMBgopwjb2DTLSokTSzL1zt6iGPaS49',
+  'DfXygSm4jCyNCybVYYK6DwvWqjKee8pbDmJGcLWNDXjh',
+  'ADuUkR4vqLUMWXxW9gh6D6L8pMSawimctcNZ5pGwDcEt',
+  'DttWaMuVvTiduZRnguLF7jNxTgiMBZ1hyAumKUiL2KRL',
+  '3AVi9Tg9Uo68tJfuvoKvqKNWKkC5wPdSSdeBnizKZ6jT',
+].map((pubkey) => new PublicKey(pubkey));
 
-// const PROFIT_BUFFER_PERCENT = 3;
+const getRandomTipAccount = () =>
+  TIP_ACCOUNTS[Math.floor(Math.random() * TIP_ACCOUNTS.length)];
 
-// const TIP_ACCOUNTS = [
-//   '96gYZGLnJYVFmbjzopPSU6QiEV5fGqZNyN9nmNhvrZU5',
-//   'HFqU5x63VTqvQss8hp11i4wVV8bD44PvwucfZ2bU7gRe',
-//   'Cw8CFyM9FkoMi7K7Crf6HNQqf4uEMzpKw6QNghXLvLkY',
-//   'ADaUMid9yfUytqMBgopwjb2DTLSokTSzL1zt6iGPaS49',
-//   'DfXygSm4jCyNCybVYYK6DwvWqjKee8pbDmJGcLWNDXjh',
-//   'ADuUkR4vqLUMWXxW9gh6D6L8pMSawimctcNZ5pGwDcEt',
-//   'DttWaMuVvTiduZRnguLF7jNxTgiMBZ1hyAumKUiL2KRL',
-//   '3AVi9Tg9Uo68tJfuvoKvqKNWKkC5wPdSSdeBnizKZ6jT',
-// ].map((pubkey) => new PublicKey(pubkey));
+const MIN_TIP_LAMPORTS = config.get('min_tip_lamports');
+const PROFIT_MARGIN_BPS = config.get('profit_margin_bps');
+const MAX_TIP_BPS = config.get('max_tip_bps');
 
-// const getRandomTipAccount = () =>
-//   TIP_ACCOUNTS[Math.floor(Math.random() * TIP_ACCOUNTS.length)];
-//
-// const MIN_TIP_LAMPORTS = config.get('min_tip_lamports');
-// const PROFIT_MARGIN_BPS = config.get('profit_margin_bps');
-//
-//
-// // // three signatrues (up to two for set up txn, one for main tx)
-// const TXN_FEES_LAMPORTS = 15000;
 
-// const minProfit = MIN_TIP_LAMPORTS + TXN_FEES_LAMPORTS;
+const TXN_FEES_LAMPORTS = 15000;
+
+const MIN_PROFIT_IN_LAMPORTS = MIN_TIP_LAMPORTS + TXN_FEES_LAMPORTS; // in lamports
 
 // const MIN_BALANCE_RENT_EXEMPT_TOKEN_ACC =
 //   await Token.getMinimumBalanceForRentExemptAccount(connection);
 
-// const payer = Keypair.fromSecretKey(
-//   Uint8Array.from(
-//     JSON.parse(fs.readFileSync(config.get('payer_keypair_path'), 'utf-8')),
-//   ),
-// );
+const payer = Keypair.fromSecretKey(
+  Uint8Array.from(
+    JSON.parse(fs.readFileSync(config.get('payer_keypair_path'), 'utf-8')),
+  ),
+);
 
-// const wallet = new anchor.Wallet(payer);
-// const ledgerProgram = anchor.workspace.JitoBomb as Program<JitoBomb>;
-//
-// const LAMPORTS_PER_USDC_UNITS = 10; // 1 soL = $100 usdc; 1000_000_000 lamports = 100_000_000 usdc units
+const wallet = new anchor.Wallet(payer);
+const ledgerProgram = anchor.workspace.JitoBomb as Program<JitoBomb>;
+
+const LAMPORTS_PER_USDC_UNITS = 10; // 1 soL = $100 usdc; 1000_000_000 lamports = 100_000_000 usdc units
 
 // // market to calculate usdc profit in sol
 // const usdcToSolMkt = getMarketsForPair(
@@ -105,63 +77,63 @@ import { logger } from "./logger";
 //   payer.publicKey,
 // );
 
-// function removeDuplicateSetupInstructions(instructions: Instruction[]) {
-//   const setupInstructions: Instruction[] = []
-//   let isWrappedSol = false;
-//   let isTransferSol = false;
-//   for (const instruction of instructions) {
-//     if (instruction.programId === "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL") {
-//       setupInstructions.push(instruction)
-//       continue
-//     }
-//
-//     if (instruction.programId === "11111111111111111111111111111111" && !isWrappedSol) {
-//       setupInstructions.push(instruction)
-//       isWrappedSol = true
-//       continue
-//     }
-//
-//     if (instruction.programId === "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA" && !isTransferSol) {
-//       setupInstructions.push(instruction)
-//       isTransferSol = true
-//     }
-//   }
-//
-//   return setupInstructions
-// }
+function removeDuplicateSetupInstructions(instructions: Instruction[]) {
+  const setupInstructions: Instruction[] = []
+  let isWrappedSol = false;
+  let isTransferSol = false;
+  for (const instruction of instructions) {
+    if (instruction.programId === "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL") {
+      setupInstructions.push(instruction)
+      continue
+    }
 
-// function deserializeSwapInstruction(instruction: Instruction) {
-//   return new TransactionInstruction({
-//     programId: new PublicKey(instruction.programId),
-//     keys: instruction.accounts.map((key) => ({
-//       pubkey: new PublicKey(key.pubkey),
-//       isSigner: key.isSigner,
-//       isWritable: key.isWritable,
-//     })), data: Buffer.from(instruction.data, "base64"),
-//   });
-// }
+    if (instruction.programId === "11111111111111111111111111111111" && !isWrappedSol) {
+      setupInstructions.push(instruction)
+      isWrappedSol = true
+      continue
+    }
 
-// async function getAddressLookupTableAccounts(
-//   keys: string[]
-// ): Promise<AddressLookupTableAccount[]> {
-//   const addressLookupTableAccountInfos =
-//     await connection.getMultipleAccountsInfo(
-//       keys.map((key) => new PublicKey(key))
-//     );
-//
-//   return addressLookupTableAccountInfos.reduce((acc, accountInfo, index) => {
-//     const addressLookupTableAddress = keys[index];
-//     if (accountInfo) {
-//       const addressLookupTableAccount = new AddressLookupTableAccount({
-//         key: new PublicKey(addressLookupTableAddress),
-//         state: AddressLookupTableAccount.deserialize(accountInfo.data),
-//       });
-//       acc.push(addressLookupTableAccount);
-//     }
-//
-//     return acc;
-//   }, new Array<AddressLookupTableAccount>());
-// }
+    if (instruction.programId === "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA" && !isTransferSol) {
+      setupInstructions.push(instruction)
+      isTransferSol = true
+    }
+  }
+
+  return setupInstructions
+}
+
+function deserializeSwapInstruction(instruction: Instruction) {
+  return new TransactionInstruction({
+    programId: new PublicKey(instruction.programId),
+    keys: instruction.accounts.map((key) => ({
+      pubkey: new PublicKey(key.pubkey),
+      isSigner: key.isSigner,
+      isWritable: key.isWritable,
+    })), data: Buffer.from(instruction.data, "base64"),
+  });
+}
+
+async function getAddressLookupTableAccounts(
+  keys: string[]
+): Promise<AddressLookupTableAccount[]> {
+  const addressLookupTableAccountInfos =
+    await connection.getMultipleAccountsInfo(
+      keys.map((key) => new PublicKey(key))
+    );
+
+  return addressLookupTableAccountInfos.reduce((acc, accountInfo, index) => {
+    const addressLookupTableAddress = keys[index];
+    if (accountInfo) {
+      const addressLookupTableAccount = new AddressLookupTableAccount({
+        key: new PublicKey(addressLookupTableAddress),
+        state: AddressLookupTableAccount.deserialize(accountInfo.data),
+      });
+      acc.push(addressLookupTableAccount);
+    }
+
+    return acc;
+  }, new Array<AddressLookupTableAccount>());
+}
 
 export type Arb = {
   bundle: VersionedTransaction[];
@@ -177,16 +149,16 @@ export type Arb = {
   timings: Timings;
 };
 
-// const ataCache = new Map<string, PublicKey>();
-// const getAta = (mint: PublicKey, owner: PublicKey) => {
-//   const key = `${mint.toBase58()}-${owner.toBase58()}`;
-//   if (ataCache.has(key)) {
-//     return ataCache.get(key);
-//   }
-//   const ata = Token.getAssociatedTokenAddressSync(mint, owner);
-//   ataCache.set(key, ata);
-//   return ata;
-// };
+const ataCache = new Map<string, PublicKey>();
+const getAta = (mint: PublicKey, owner: PublicKey) => {
+  const key = `${mint.toBase58()}-${owner.toBase58()}`;
+  if (ataCache.has(key)) {
+    return ataCache.get(key);
+  }
+  const ata = getAssociatedTokenAddressSync(mint, owner);
+  ataCache.set(key, ata);
+  return ata;
+};
 
 async function* buildBundle(
   arbIdeaIterator: AsyncGenerator<ArbIdea>,
@@ -198,6 +170,9 @@ async function* buildBundle(
     const mirroringLegRoutePlan = mirroringLegQuote.routePlan
 
     let allRoutesQuote: QuoteResponse
+
+    const baseMint = balancingLegFirst ? balancingLeg.sourceMint : balancingLeg.destinationMint
+
     if (balancingLegFirst) {
       const allRoutesPlan: RoutePlanStep[] = []
 
@@ -261,18 +236,111 @@ async function* buildBundle(
       }
     }
 
-    logger.info({ allRoutesQuote: allRoutesQuote, timeElapsed: Date.now() - timings.calcArbEnd }, 'allRoutesQuote')
+    const allSwapInstructionsResponse = await jupiterClient.swapInstructionsPost({
+      swapRequest: {
+        userPublicKey: wallet.publicKey.toBase58(),
+        quoteResponse: allRoutesQuote,
+        prioritizationFeeLamports: TXN_FEES_LAMPORTS,
+        useSharedAccounts: false,
+        wrapAndUnwrapSol: true
+      }
+    })
 
-    // const allSwapInstructionsResponse = await jupiterClient.swapInstructionsPost({
-    //   swapRequest: {
-    //     userPublicKey: wallet.publicKey.toBase58(),
-    //     quoteResponse: allRoutesQuote,
-    //     prioritizationFeeLamports: TXN_FEES_LAMPORTS,
-    //     useSharedAccounts: false,
-    //     wrapAndUnwrapSol: true
-    //   }
-    // })
+    // dedup wrapped sol instruction
+    const setupInstructions = removeDuplicateSetupInstructions(allSwapInstructionsResponse.setupInstructions)
 
+    // manual construct instruction
+    const instructions: TransactionInstruction[] = []
+
+    const randomSeed = new BN(Math.floor(Math.random() * 1000000));
+    // todo: to optimize this
+    const ledgerAccount = PublicKey.findProgramAddressSync(
+      [Buffer.from("ledger"), wallet.publicKey.toBuffer(), randomSeed.toArrayLike(Buffer, "le", 8)],
+      ledgerProgram.programId
+    )[0];
+
+    const baseTokenATA = getAta(
+      new PublicKey(baseMint),
+      wallet.publicKey
+    );
+
+    const minimum_profit_in_lamports = baseMint === BASE_MINTS_OF_INTEREST_B58.SOL ? MIN_PROFIT_IN_LAMPORTS : Math.ceil(MIN_PROFIT_IN_LAMPORTS / LAMPORTS_PER_USDC_UNITS)
+    const lamportsPerBaseToken = baseMint === BASE_MINTS_OF_INTEREST_B58.SOL ? 1 : LAMPORTS_PER_USDC_UNITS
+
+    const startLedgerIx = await ledgerProgram.methods
+      .startLedger(randomSeed)
+      .accountsStrict({
+        signer: wallet.publicKey,
+        monitorAta: baseTokenATA,
+        ledgerAccount,
+        instructions: SYSVAR_INSTRUCTIONS_PUBKEY,
+        systemProgram: SystemProgram.programId,
+      })
+      .instruction();
+
+    instructions.push(startLedgerIx)
+
+    instructions.push(
+      ...allSwapInstructionsResponse.computeBudgetInstructions.map(deserializeSwapInstruction),
+      ...setupInstructions.map(deserializeSwapInstruction),
+    )
+
+    if (allSwapInstructionsResponse.tokenLedgerInstruction) {
+      instructions.push(deserializeSwapInstruction(allSwapInstructionsResponse.tokenLedgerInstruction))
+    }
+
+    instructions.push(deserializeSwapInstruction(allSwapInstructionsResponse.swapInstruction))
+
+    const endLedgerIx = await ledgerProgram.methods
+      .endLedger(
+        randomSeed,
+        new BN(minimum_profit_in_lamports),
+        lamportsPerBaseToken,
+        new BN(PROFIT_MARGIN_BPS), // profit margin
+        new BN(MAX_TIP_BPS), // max tip bps
+        new BN(MIN_TIP_LAMPORTS), // minimum tip amount
+      )
+      .accountsStrict({
+        signer: wallet.publicKey,
+        monitorAta: baseTokenATA,
+        ledgerAccount,
+        tipAccount: getRandomTipAccount(),
+        instructions: SYSVAR_INSTRUCTIONS_PUBKEY,
+        systemProgram: SystemProgram.programId,
+      })
+      .instruction();
+
+    instructions.push(endLedgerIx)
+
+    if (allSwapInstructionsResponse.cleanupInstruction) {
+      instructions.push(deserializeSwapInstruction(allSwapInstructionsResponse.cleanupInstruction))
+    }
+
+    // logger.info(JSON.stringify(instructions, null, 2))
+
+    const addressLookupTableAccounts: AddressLookupTableAccount[] = [];
+    addressLookupTableAccounts.push(
+      ...(await getAddressLookupTableAccounts(allSwapInstructionsResponse.addressLookupTableAddresses))
+    );
+
+    const blockhash = (await connection.getLatestBlockhash("confirmed")).blockhash;
+    const messageV0 = new TransactionMessage({
+      payerKey: wallet.publicKey,
+      recentBlockhash: blockhash,
+      instructions: instructions,
+    }).compileToV0Message(addressLookupTableAccounts);
+
+    const transaction = new VersionedTransaction(messageV0);
+
+    // sign and send
+    transaction.sign([wallet.payer]);
+
+    const res = await connection.simulateTransaction(transaction, {
+      replaceRecentBlockhash: false,
+      commitment: "confirmed",
+    })
+
+    logger.info({ simulation: res, timeElapsed: Date.now() - timings.calcArbEnd }, "simulation result")
   }
   //   const hop0 = route[0];
   //   const hop0SourceMint = new PublicKey(
