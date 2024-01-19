@@ -318,12 +318,9 @@ async function* buildBundle(
       ...(await getAddressLookupTableAccounts(allSwapInstructionsResponse.addressLookupTableAddresses))
     );
 
-    // todo: optimize blockhash
-    const blockhash = (await connection.getLatestBlockhash("confirmed")).blockhash;
-
     const messageV0 = new TransactionMessage({
       payerKey: wallet.publicKey,
-      recentBlockhash: blockhash,
+      recentBlockhash: txn.message.recentBlockhash,
       instructions: instructions,
     }).compileToV0Message(addressLookupTableAccounts);
 
