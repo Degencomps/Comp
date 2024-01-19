@@ -173,7 +173,7 @@ async function* buildBundle(
         outAmount: inAmount.toString(),
         otherAmountThreshold: inAmount.toString(), // this is not used by jupiter
         swapMode: SwapMode.ExactIn,
-        slippageBps: 200, // we have ledger to check at the end so this is ok
+        slippageBps: 1000, // we have ledger to check at the end so this is ok
         priceImpactPct: "1", // does it matter
         routePlan: allRoutesPlan,
       }
@@ -204,7 +204,7 @@ async function* buildBundle(
         outAmount: inAmount.toString(),
         otherAmountThreshold: inAmount.toString(), // this is not used by jupiter
         swapMode: SwapMode.ExactIn,
-        slippageBps: 0, // this is used to determine the slippage at final swap by jupiter, we can set it larger as we have ledger check
+        slippageBps: 1000, // we have ledger to check at the end so this is ok
         priceImpactPct: "1", // does it matter
         routePlan: allRoutesPlan,
       }
@@ -320,6 +320,7 @@ async function* buildBundle(
 
     // todo: optimize blockhash
     const blockhash = (await connection.getLatestBlockhash("confirmed")).blockhash;
+
     const messageV0 = new TransactionMessage({
       payerKey: wallet.publicKey,
       recentBlockhash: blockhash,
