@@ -14,7 +14,7 @@ import { logger } from './logger.js';
 import { jupiterClient } from './clients/jupiter.js';
 import { connection } from "./clients/rpc.js";
 import BN from "bn.js";
-import { getAssociatedTokenAddressSync } from "@solana/spl-token-3";
+import { createSyncNativeInstruction, getAssociatedTokenAddressSync } from "@solana/spl-token-3";
 import { Program } from "@coral-xyz/anchor";
 import { IDL as JitoBomb } from "./clients/types/jito_bomb.js";
 import { BASE_MINTS_OF_INTEREST_B58 } from "./constants.js";
@@ -235,8 +235,6 @@ async function* buildBundle(
     // dedup wrapped sol instruction
     const setupInstructions = removeDuplicateSetupInstructions(allSwapInstructionsResponse.setupInstructions)
 
-    // manual construct instruction
-    const instructions: TransactionInstruction[] = []
 
     const randomSeed = new BN(Math.floor(Math.random() * 1000000));
 
@@ -254,6 +252,18 @@ async function* buildBundle(
     const minimum_profit_in_lamports = baseMint === BASE_MINTS_OF_INTEREST_B58.SOL ? MIN_PROFIT_IN_LAMPORTS : Math.ceil(MIN_PROFIT_IN_LAMPORTS / LAMPORTS_PER_USDC_UNITS)
     const lamportsPerBaseToken = baseMint === BASE_MINTS_OF_INTEREST_B58.SOL ? 1 : LAMPORTS_PER_USDC_UNITS
 
+    const syncNativeIx = createSyncNativeInstruction(
+      baseTokenATA
+    )
+
+    // manual construct instruction
+    const instructions: TransactionInstruction[] = []
+
+    instructions.push(
+      ...allSwapInstructionsResponse.computeBudgetInstructions.map(deserializeSwapInstruction),
+      ...setupInstructions.map(deserializeSwapInstruction),
+    )
+
     const startLedgerIx = await ledgerProgram.methods
       .startLedger(randomSeed)
       .accountsStrict({
@@ -267,16 +277,16 @@ async function* buildBundle(
 
     instructions.push(startLedgerIx)
 
-    instructions.push(
-      ...allSwapInstructionsResponse.computeBudgetInstructions.map(deserializeSwapInstruction),
-      ...setupInstructions.map(deserializeSwapInstruction),
-    )
-
     if (allSwapInstructionsResponse.tokenLedgerInstruction) {
       instructions.push(deserializeSwapInstruction(allSwapInstructionsResponse.tokenLedgerInstruction))
     }
 
     instructions.push(deserializeSwapInstruction(allSwapInstructionsResponse.swapInstruction))
+
+    // if sol is base, sync native
+    if (baseMint === BASE_MINTS_OF_INTEREST_B58.SOL) {
+      instructions.push(syncNativeIx)
+    }
 
     const endLedgerIx = await ledgerProgram.methods
       .endLedger(
