@@ -86,7 +86,7 @@ export type JitoBomb = {
           "type": "f64"
         },
         {
-          "name": "profitMarginBps",
+          "name": "tipBps",
           "type": "u64"
         },
         {
@@ -263,7 +263,7 @@ export const IDL: JitoBomb = {
           "type": "f64"
         },
         {
-          "name": "profitMarginBps",
+          "name": "tipBps",
           "type": "u64"
         },
         {

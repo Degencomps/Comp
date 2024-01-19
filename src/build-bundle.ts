@@ -14,7 +14,11 @@ import { logger } from './logger.js';
 import { jupiterClient } from './clients/jupiter.js';
 import { connection } from "./clients/rpc.js";
 import BN from "bn.js";
-import { createSyncNativeInstruction, getAssociatedTokenAddressSync } from "@solana/spl-token-3";
+import {
+  createSyncNativeInstruction,
+  getAssociatedTokenAddressSync,
+  getMinimumBalanceForRentExemptAccount
+} from "@solana/spl-token-3";
 import { Program } from "@coral-xyz/anchor";
 import { IDL as JitoBomb } from "./clients/types/jito_bomb.js";
 import { BASE_MINTS_OF_INTEREST_B58 } from "./constants.js";
@@ -35,15 +39,16 @@ const getRandomTipAccount = () =>
   TIP_ACCOUNTS[Math.floor(Math.random() * TIP_ACCOUNTS.length)];
 
 const MIN_TIP_LAMPORTS = config.get('min_tip_lamports');
-const PROFIT_MARGIN_BPS = config.get('profit_margin_bps');
+const TIP_BPS = config.get('tip_bps');
 const MAX_TIP_BPS = config.get('max_tip_bps');
 const LEDGER_PROGRAM_ID = config.get('ledger_program')
-const TXN_FEES_LAMPORTS = config.get('txn_fees_lamports'); // todo: do we even need this?
+const TXN_FEES_LAMPORTS = config.get('txn_fees_lamports'); // transaction fees in lamports TODO: need to consider new token account rents?
 
-const MIN_PROFIT_IN_LAMPORTS = MIN_TIP_LAMPORTS + TXN_FEES_LAMPORTS; // in lamports
+const MIN_BALANCE_RENT_EXEMPT_TOKEN_ACC =
+  await getMinimumBalanceForRentExemptAccount(connection);
 
-// const MIN_BALANCE_RENT_EXEMPT_TOKEN_ACC =
-//   await Token.getMinimumBalanceForRentExemptAccount(connection);
+// TODO: default minimum profit needs to cover transaction fee and the rent of tokens (regardless if there is a new one)
+const MIN_PROFIT_IN_LAMPORTS = TXN_FEES_LAMPORTS + MIN_BALANCE_RENT_EXEMPT_TOKEN_ACC; // in lamports
 
 const payer = Keypair.fromSecretKey(
   Uint8Array.from(
@@ -57,6 +62,7 @@ const provider = new anchor.AnchorProvider(connection, wallet, {
 });
 const ledgerProgram = new Program(JitoBomb, LEDGER_PROGRAM_ID, provider)
 
+// todo: need to dynamically update this
 const LAMPORTS_PER_USDC_UNITS = 10; // 1 soL = $100 usdc; 1000_000_000 lamports = 100_000_000 usdc units
 
 function removeDuplicateSetupInstructions(instructions: Instruction[]) {
@@ -218,7 +224,6 @@ async function* buildBundle(
         swapRequest: {
           userPublicKey: wallet.publicKey.toBase58(),
           quoteResponse: allRoutesQuote,
-          prioritizationFeeLamports: TXN_FEES_LAMPORTS, // todo: note the compute units ixs are removed below
           useSharedAccounts: false,
           wrapAndUnwrapSol: true
         }
@@ -249,7 +254,7 @@ async function* buildBundle(
       wallet.publicKey
     );
 
-    const minimum_profit_in_lamports = baseMint === BASE_MINTS_OF_INTEREST_B58.SOL ? MIN_PROFIT_IN_LAMPORTS : Math.ceil(MIN_PROFIT_IN_LAMPORTS / LAMPORTS_PER_USDC_UNITS)
+    const minimumProfitInBaseToken = baseMint === BASE_MINTS_OF_INTEREST_B58.SOL ? MIN_PROFIT_IN_LAMPORTS : Math.ceil(MIN_PROFIT_IN_LAMPORTS / LAMPORTS_PER_USDC_UNITS)
     const lamportsPerBaseToken = baseMint === BASE_MINTS_OF_INTEREST_B58.SOL ? 1 : LAMPORTS_PER_USDC_UNITS
 
     const syncNativeIx = createSyncNativeInstruction(
@@ -259,7 +264,7 @@ async function* buildBundle(
     // manual construct instruction
     const instructions: TransactionInstruction[] = []
 
-    // todo: rethink compute units, need to add to calculate minimum profit
+    // todo: do we still need prioritization fee
     instructions.push(
       // ...allSwapInstructionsResponse.computeBudgetInstructions.map(deserializeSwapInstruction),
       ...setupInstructions.map(deserializeSwapInstruction),
@@ -292,11 +297,11 @@ async function* buildBundle(
     const endLedgerIx = await ledgerProgram.methods
       .endLedger(
         randomSeed,
-        new BN(minimum_profit_in_lamports),
+        new BN(minimumProfitInBaseToken), // minimum profit in base token
         lamportsPerBaseToken,
-        new BN(PROFIT_MARGIN_BPS), // profit margin
-        new BN(MAX_TIP_BPS), // max tip bps
-        new BN(MIN_TIP_LAMPORTS), // minimum tip amount
+        new BN(TIP_BPS), // tip bps of the (profit minus minimum profit in base token)
+        new BN(MAX_TIP_BPS), // max tip bps of the sol balance
+        new BN(MIN_TIP_LAMPORTS), // requires tip > min tip amount
       )
       .accountsStrict({
         signer: wallet.publicKey,
@@ -329,13 +334,6 @@ async function* buildBundle(
 
     // sign and send
     backrunningTx.sign([wallet.payer]);
-
-    // const res = await connection.simulateTransaction(backrunningTx, {
-    //   replaceRecentBlockhash: false,
-    //   commitment: "confirmed",
-    // })
-    //
-    // logger.info({ simulation: res, timeElapsed: Date.now() - timings.calcArbEnd }, "simulation result")
 
     // construct bundle
     const bundle = [txn, backrunningTx];
