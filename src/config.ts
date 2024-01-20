@@ -21,8 +21,8 @@ const config = convict({
     env: 'BLOCK_ENGINE_URLS',
   },
   auth_keypair_path: {
-    format: String,
-    default: './auth.json',
+    format: Array,
+    default: ['./auth.json'],
     env: 'AUTH_KEYPAIR_PATH',
   },
   rpc_url: {

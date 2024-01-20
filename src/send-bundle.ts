@@ -3,7 +3,7 @@ import { stringify } from 'csv-stringify';
 import * as fs from 'fs';
 import { Bundle as JitoBundle } from 'jito-ts/dist/sdk/block-engine/types.js';
 import { Arb } from './build-bundle.js';
-import { searcherClient } from './clients/jito.js';
+import { searcherClientManager } from './clients/jito.js';
 import { connection } from './clients/rpc.js';
 import { logger } from './logger.js';
 import { MAX_TRADE_AGE_MS } from "./calculate-arb.js";
@@ -98,39 +98,43 @@ async function processCompletedTrade(uuid: string) {
 }
 
 async function sendBundle(bundleIterator: AsyncGenerator<Arb>): Promise<void> {
-  searcherClient.onBundleResult(
-    (bundleResult) => {
-      const bundleId = bundleResult.bundleId;
-      const isAccepted = bundleResult.accepted;
-      const isRejected = bundleResult.rejected;
-      if (isAccepted) {
-        logger.info(
-          `Bundle ${bundleId} accepted in slot ${bundleResult.accepted!.slot}`,
-        );
-        if (bundlesInTransit.has(bundleId)) {
-          bundlesInTransit.get(bundleId)!.accepted += 1;
-        }
-      }
-      if (isRejected) {
-        logger.info({ result: bundleResult.rejected }, `Bundle ${bundleId} rejected:`);
-        if (bundlesInTransit.has(bundleId)) {
-          const trade: Trade = bundlesInTransit.get(bundleId)!;
-          trade.rejected = true;
-          const rejectedEntry = Object.entries(bundleResult.rejected!).find(
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            ([_, value]) => value !== undefined,
+  const searcherClients = searcherClientManager.getAllClients();
+  searcherClients.forEach((searcherClient) => {
+    searcherClient.onBundleResult(
+      (bundleResult) => {
+        const bundleId = bundleResult.bundleId;
+        const isAccepted = bundleResult.accepted;
+        const isRejected = bundleResult.rejected;
+        if (isAccepted) {
+          logger.info(
+            `Bundle ${bundleId} accepted in slot ${bundleResult.accepted!.slot}`,
           );
-          const [errorType, errorContent] = rejectedEntry!;
-          trade.errorType = errorType;
-          trade.errorContent = JSON.stringify(errorContent);
+          if (bundlesInTransit.has(bundleId)) {
+            bundlesInTransit.get(bundleId)!.accepted += 1;
+          }
         }
-      }
-    },
-    (error) => {
-      logger.error(error);
-      throw error;
-    },
-  );
+        if (isRejected) {
+          logger.debug({ result: bundleResult.rejected }, `Bundle ${bundleId} rejected:`);
+          if (bundlesInTransit.has(bundleId)) {
+            const trade: Trade = bundlesInTransit.get(bundleId)!;
+            trade.rejected = true;
+            const rejectedEntry = Object.entries(bundleResult.rejected!).find(
+              // eslint-disable-next-line @typescript-eslint/no-unused-vars
+              ([_, value]) => value !== undefined,
+            );
+            const [errorType, errorContent] = rejectedEntry!;
+            trade.errorType = errorType;
+            trade.errorContent = JSON.stringify(errorContent);
+          }
+        }
+      },
+      (error) => {
+        logger.error(error);
+        throw error;
+      },
+    );
+  });
+
 
   for await (const {
     bundle,
@@ -144,7 +148,9 @@ async function sendBundle(bundleIterator: AsyncGenerator<Arb>): Promise<void> {
       continue;
     }
 
-    searcherClient
+    const searcherSendClient = searcherClientManager.getNextClient();
+
+    searcherSendClient
       .sendBundle(new JitoBundle(bundle, 5))
       .then((bundleId) => {
         logger.info(

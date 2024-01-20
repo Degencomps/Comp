@@ -255,20 +255,26 @@ function getProfitForQuote(quote: Quote) {
 
 function getTipBpsFromInAmount(inAmount: JsbiType, sourceMint: string) {
   // tipping base on the balancing in TODO: improve this from analysis
-  let tipBps = 5250
+  let tipBps = 5300
   if (sourceMint === BASE_MINTS_OF_INTEREST_B58.SOL) {
     if (JSBI.greaterThan(inAmount, JSBI.BigInt(1_000_000_000))) {
-      tipBps = 6250
+      tipBps = 6300
+    }
+    if (JSBI.greaterThan(inAmount, JSBI.BigInt(2_000_000_000))) {
+      tipBps = 7300
     }
     if (JSBI.greaterThan(inAmount, JSBI.BigInt(3_000_000_000))) {
-      tipBps = 8250
+      tipBps = 8300
     }
   } else if (sourceMint === BASE_MINTS_OF_INTEREST_B58.USDC) {
     if (JSBI.greaterThan(inAmount, JSBI.BigInt(100_000_000))) {
-      tipBps = 6250
+      tipBps = 6300
+    }
+    if (JSBI.greaterThan(inAmount, JSBI.BigInt(200_000_000))) {
+      tipBps = 7300
     }
     if (JSBI.greaterThan(inAmount, JSBI.BigInt(300_000_000))) {
-      tipBps = 8250
+      tipBps = 8300
     }
   }
 
