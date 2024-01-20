@@ -130,8 +130,8 @@ async function sendBundle(bundleIterator: AsyncGenerator<Arb>): Promise<void> {
         }
       },
       (error) => {
-        logger.error(error);
-        throw error;
+        logger.error({ error }, `Client${index.toString()} onBundleResult error`);
+        // throw error;
       },
     );
   }
