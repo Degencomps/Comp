@@ -11,9 +11,9 @@ import {
 } from './constants.js';
 import { logger } from './logger.js';
 import {
-  calculateJupiterQuotes as workerCalculateJupiterQuotes
+  calculateJupiterBestQuote as workerCalculateJupiterBestQuote,
 } from './markets/index.js';
-import { Quote, SerializableLeg, SerializableLegFixed } from './markets/types.js';
+import { SerializableLeg, SerializableLegFixed } from './markets/types.js';
 import { BackrunnableTrade } from './post-simulation-filter.js';
 import { JsbiType, Timings } from './types.js';
 import { prioritize, toDecimalString } from './utils.js';
@@ -45,17 +45,6 @@ type ArbIdea = {
   trade: ArbIdeaTrade
   timings: Timings;
 };
-
-function getProfitForQuote(quote: Quote) {
-  return JSBI.subtract(quote.out, quote.in);
-  // const flashloanFee = JSBI.divide(
-  //   JSBI.multiply(quote.in, JSBI.BigInt(SOLEND_FLASHLOAN_FEE_BPS)),
-  //   JSBI.BigInt(10000),
-  // );
-  // const profit = JSBI.subtract(quote.out, quote.in);
-  // const profitMinusFlashLoanFee = JSBI.subtract(profit, flashloanFee);
-  // return profitMinusFlashLoanFee;
-}
 
 async function* calculateArb(
   backrunnableTradesIterator: AsyncGenerator<BackrunnableTrade>,
@@ -168,37 +157,24 @@ in ${timings.postSimEnd - timings.mempoolEnd}ms`);
       destinationMint: balancingLeg.sourceMint,
     }
 
-    const quotes = await workerCalculateJupiterQuotes({
+    const bestQuoteResult = await workerCalculateJupiterBestQuote({
       balancingLeg,
       mirroringLeg,
-      balancingLegFirst
+      balancingLegFirst,
+      victimTxnSignature: bs58.encode(txn.signatures[0])
     }, MAX_ARB_CALCULATION_TIME_MS);
 
-    if (quotes === null || quotes.length === 0) continue;
+    if (bestQuoteResult === null) continue;
 
-    // TODO: move most of this logic to the worker itself
+    const { quote: bestQuote, profit } = bestQuoteResult;
 
-    logger.debug(`Found ${quotes.length} potential arbs for ${bs58.encode(txn.signatures[0]).slice(0, 4)}...`);
-    // find the best quote
-    const bestQuote = quotes.reduce((best, current) => {
-      const currentQuote = current[1];
-      const currentProfit = getProfitForQuote(currentQuote);
-      const bestQuote = best[1];
-      const bestProfit = getProfitForQuote(bestQuote);
-      if (JSBI.greaterThan(currentProfit, bestProfit)) {
-        return current;
-      } else {
-        return best;
-      }
-    });
-
-    const profit = getProfitForQuote(bestQuote);
+    const profitBN = JSBI.BigInt(profit)
 
     const sourceIsUsdc = USDC_MINT_STRING === backrunSourceMint;
     const decimals = sourceIsUsdc ? USDC_DECIMALS : SOL_DECIMALS;
     const backrunSourceMintName = sourceIsUsdc ? 'USDC' : 'SOL';
 
-    const profitDecimals = toDecimalString(profit.toString(), decimals);
+    const profitDecimals = toDecimalString(profitBN.toString(), decimals);
     const arbSizeDecimals = toDecimalString(bestQuote.in.toString(), decimals);
 
     const marketsString = bestQuote.quote.routePlan.reduce((acc, r) => {
@@ -214,7 +190,7 @@ in ${timings.postSimEnd - timings.mempoolEnd}ms`);
 
     yield {
       txn,
-      expectedProfit: profit,
+      expectedProfit: profitBN,
       trade: {
         in: bestQuote.in,
         out: bestQuote.out,

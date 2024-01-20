@@ -10,7 +10,7 @@ import { SplTokenSwapDEX } from './spl-token-swap/index.js';
 import {
   AddPoolResultPayload,
   AmmCalcWorkerParamMessage,
-  AmmCalcWorkerResultMessage,
+  AmmCalcWorkerResultMessage, CalculateJupiterBestQuoteParamPayload, CalculateJupiterBestQuoteResultPayload,
   CalculateJupiterQuotesParamPayload,
   CalculateJupiterQuotesResultPayload,
   DEX,
@@ -241,8 +241,40 @@ async function calculateJupiterQuotes(
   return serializableQuotes.map(toQuote)
 }
 
+async function calculateJupiterBestQuote(
+  request: CalculateJupiterBestQuoteParamPayload,
+  timeout?: number,
+): Promise<{
+  quote: Quote;
+  profit: string;
+} | null> {
+  const message: AmmCalcWorkerParamMessage = {
+    type: 'calculateJupiterBestQuote',
+    payload: request,
+  };
+  const result = await ammCalcWorkerPool.runTask<
+    AmmCalcWorkerParamMessage,
+    AmmCalcWorkerResultMessage
+  >(message, timeout);
+
+  if (result === null) return null;
+
+  const payload = result.payload as CalculateJupiterBestQuoteResultPayload;
+
+  if (payload === null) return null;
+
+  const quote = toQuote(payload.quote)
+
+  return {
+    quote,
+    profit: payload.profit
+  }
+}
+
 export {
-  DEX, calculateJupiterQuotes,
+  DEX,
+  calculateJupiterQuotes,
+  calculateJupiterBestQuote,
   getAll2HopRoutes,
   getMarketForVault,
   getMarketsForPair,

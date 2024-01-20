@@ -79,8 +79,17 @@ export type CalculateJupiterQuotesParamPayload = {
   balancingLegFirst: boolean;
 };
 
+export type CalculateJupiterBestQuoteParamPayload = CalculateJupiterQuotesParamPayload & {
+  victimTxnSignature: string;
+}
+
 export type CalculateJupiterQuotesResultPayload = {
   quotes: SerializableQuote[]
+}
+
+export type CalculateJupiterBestQuoteResultPayload = {
+  quote: SerializableQuote;
+  profit: string;
 }
 
 export type AmmCalcWorkerParamMessage =
@@ -95,6 +104,10 @@ export type AmmCalcWorkerParamMessage =
   | {
     type: 'calculateJupiterQuotes',
     payload: CalculateJupiterQuotesParamPayload;
+  }
+  | {
+  type: 'calculateJupiterBestQuote',
+  payload: CalculateJupiterBestQuoteParamPayload;
   };
 
 export type AmmCalcWorkerResultMessage =
@@ -109,6 +122,10 @@ export type AmmCalcWorkerResultMessage =
   | {
     type: 'calculateJupiterQuotes',
     payload: CalculateJupiterQuotesResultPayload;
+  }
+  | {
+  type: 'calculateJupiterBestQuote',
+  payload: CalculateJupiterBestQuoteResultPayload;
   };
 
 export type SerializableAccountInfo = {
