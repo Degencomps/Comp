@@ -99,22 +99,23 @@ async function processCompletedTrade(uuid: string) {
 
 async function sendBundle(bundleIterator: AsyncGenerator<Arb>): Promise<void> {
   const searcherClients = searcherClientManager.getAllClients();
-  searcherClients.forEach((searcherClient) => {
-    searcherClient.onBundleResult(
+  for (const [index, client] of searcherClients.entries()) {
+    client.onBundleResult(
       (bundleResult) => {
         const bundleId = bundleResult.bundleId;
         const isAccepted = bundleResult.accepted;
         const isRejected = bundleResult.rejected;
         if (isAccepted) {
           logger.info(
-            `Bundle ${bundleId} accepted in slot ${bundleResult.accepted!.slot}`,
+            `Client${index.toString()} Bundle ${bundleId} accepted in slot ${bundleResult.accepted!.slot}`,
           );
           if (bundlesInTransit.has(bundleId)) {
             bundlesInTransit.get(bundleId)!.accepted += 1;
           }
         }
         if (isRejected) {
-          logger.debug({ result: bundleResult.rejected }, `Bundle ${bundleId} rejected:`);
+          logger.info({ result: bundleResult.rejected }, `Client${index.toString()} Bundle ${bundleId} rejected:`);
+          // logger.info(`Bundle ${bundleId} rejected`);
           if (bundlesInTransit.has(bundleId)) {
             const trade: Trade = bundlesInTransit.get(bundleId)!;
             trade.rejected = true;
@@ -133,7 +134,7 @@ async function sendBundle(bundleIterator: AsyncGenerator<Arb>): Promise<void> {
         throw error;
       },
     );
-  });
+  }
 
 
   for await (const {

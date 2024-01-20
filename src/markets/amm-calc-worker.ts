@@ -21,6 +21,8 @@ import { BASE_MINTS_OF_INTEREST_B58 } from "../constants.js";
 const ARB_CALCULATION_NUM_STEPS = JSBI.BigInt(config.get('arb_calculation_num_steps'));
 const ZERO = JSBI.BigInt(0);
 const TWO = JSBI.BigInt(2);
+const MINIMUM_TRADE_SIZE_SOL = JSBI.BigInt(100_000_000); // 0.1SOL
+const MINIMUM_TRADE_SIZE_USDC = JSBI.BigInt(10_000_000); // 10USDC
 const SCALING_FACTOR = JSBI.BigInt(10000);
 const BPS_MULTIPLIER = JSBI.BigInt(10000);
 
@@ -229,8 +231,6 @@ async function calculateJupiterQuotes(balancingLeg: SerializableLegFixed, mirror
   // TODO:
   // get the most profitable quote only
   // filter out trades that are too small
-  // build and sign a bundle for that quote
-  // inAmount should check payer balance
 
   const response: AmmCalcWorkerResultMessage = {
     type: 'calculateJupiterQuotes',
@@ -307,6 +307,18 @@ async function calculateJupiterBestQuote(balancingLeg: SerializableLegFixed, mir
         const profit = JSBI.subtract(mirroringLeg.out, q.in)
 
         if (JSBI.greaterThan(profit, ZERO)) {
+
+          // further filter down small trade
+          if (balancingLeg.sourceMint === BASE_MINTS_OF_INTEREST_B58.SOL) {
+            if (JSBI.lessThan(q.in, MINIMUM_TRADE_SIZE_SOL)) {
+              continue
+            }
+          } else if (balancingLeg.sourceMint === BASE_MINTS_OF_INTEREST_B58.USDC) {
+            if (JSBI.lessThan(q.in, MINIMUM_TRADE_SIZE_USDC)) {
+              continue
+            }
+          }
+
           profitableQuotes.push({
             in: q.in,
             out: mirroringLeg.out,
@@ -336,6 +348,18 @@ async function calculateJupiterBestQuote(balancingLeg: SerializableLegFixed, mir
         const mirroringLeg = mirroringLegQuotes[i]
         const profit = JSBI.subtract(q.out, mirroringLeg.in)
         if (JSBI.greaterThan(profit, ZERO)) {
+
+          // further filter down small trade
+          if (balancingLeg.destinationMint === BASE_MINTS_OF_INTEREST_B58.SOL) {
+            if (JSBI.lessThan(mirroringLeg.in, MINIMUM_TRADE_SIZE_SOL)) {
+              continue
+            }
+          } else if (balancingLeg.destinationMint === BASE_MINTS_OF_INTEREST_B58.USDC) {
+            if (JSBI.lessThan(mirroringLeg.in, MINIMUM_TRADE_SIZE_USDC)) {
+              continue
+            }
+          }
+
           profitableQuotes.push({
             in: mirroringLeg.in,
             out: q.out,

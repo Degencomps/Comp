@@ -72,7 +72,6 @@ const ledgerProgram = new Program(JitoBomb, LEDGER_PROGRAM_ID, provider)
 // todo: need to dynamically update this
 const LAMPORTS_PER_USDC_UNITS = LAMPORTS_PER_USDC_UNIT
 
-
 function deserializeSwapInstruction(instruction: Instruction) {
   return new TransactionInstruction({
     programId: new PublicKey(instruction.programId),
@@ -141,6 +140,28 @@ const getAta = (mint: PublicKey, owner: PublicKey) => {
   ataCache.set(key, ata);
   return ata;
 };
+
+const wrappedSolAccount = getAta(NATIVE_MINT, wallet.publicKey)
+
+// create wrapped sol account
+const createWrappedSolAccountIx =
+  createAssociatedTokenAccountIdempotentInstruction(
+    wallet.publicKey,
+    wrappedSolAccount,
+    wallet.publicKey,
+    NATIVE_MINT
+  )
+
+// close wrapped sol account
+const closeWrappedSolAccountIx = createCloseAccountInstruction(
+  wrappedSolAccount,
+  wallet.publicKey,
+  wallet.publicKey
+);
+
+const syncNativeIx = createSyncNativeInstruction(
+  wrappedSolAccount
+)
 
 async function* buildBundle(
   arbIdeaIterator: AsyncGenerator<ArbIdea>,
@@ -322,10 +343,6 @@ async function compileJupiterTransaction(
   const minimumProfitInBaseToken = inputMint === BASE_MINTS_OF_INTEREST_B58.SOL ? MIN_PROFIT_IN_LAMPORTS : Math.ceil(MIN_PROFIT_IN_LAMPORTS / LAMPORTS_PER_USDC_UNITS)
   const lamportsPerBaseToken = inputMint === BASE_MINTS_OF_INTEREST_B58.SOL ? 1 : LAMPORTS_PER_USDC_UNITS
 
-  const syncNativeIx = createSyncNativeInstruction(
-    baseTokenATA
-  )
-
   // manual construct instruction
   const instructions: TransactionInstruction[] = []
 
@@ -339,15 +356,6 @@ async function compileJupiterTransaction(
   if (inputMint === BASE_MINTS_OF_INTEREST_B58.SOL) {
     const wrappedSolAccount = getAta(NATIVE_MINT, wallet.publicKey)
 
-    // create wrapped sol account
-    const createWrappedSolAccountIx =
-      createAssociatedTokenAccountIdempotentInstruction(
-        wallet.publicKey,
-        wrappedSolAccount,
-        wallet.publicKey,
-        NATIVE_MINT
-      )
-
     // transfer sol
     const transferIx = SystemProgram.transfer({
       fromPubkey: wallet.publicKey,
@@ -356,7 +364,6 @@ async function compileJupiterTransaction(
     });
 
     instructions.push(createWrappedSolAccountIx)
-
     instructions.push(transferIx)
     instructions.push(syncNativeIx)
   }
@@ -407,14 +414,6 @@ async function compileJupiterTransaction(
   instructions.push(endLedgerIx)
 
   if (inputMint === BASE_MINTS_OF_INTEREST_B58.SOL) {
-    const wrappedSolAccount = getAta(NATIVE_MINT, wallet.publicKey)
-    // close wrapped sol account
-    const closeWrappedSolAccountIx = createCloseAccountInstruction(
-      wrappedSolAccount,
-      wallet.publicKey,
-      wallet.publicKey
-    );
-
     instructions.push(closeWrappedSolAccountIx)
   }
 
