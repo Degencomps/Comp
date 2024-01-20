@@ -9,7 +9,7 @@ import { JupiterDexProgramLabel } from './jupiter/index.js';
 import {
   AddPoolParamPayload,
   AmmCalcWorkerParamMessage,
-  AmmCalcWorkerResultMessage,
+  AmmCalcWorkerResultMessage, CalculateJupiterBestQuoteParamPayload,
   CalculateJupiterQuotesParamPayload,
   Quote,
   SerializableLeg,
@@ -230,6 +230,93 @@ async function calculateJupiterQuotes(balancingLeg: SerializableLegFixed, mirror
   parentPort!.postMessage(response);
 }
 
+function getProfitForQuote(quote: Quote) {
+  return JSBI.subtract(quote.out, quote.in);
+  // const flashloanFee = JSBI.divide(
+  //   JSBI.multiply(quote.in, JSBI.BigInt(SOLEND_FLASHLOAN_FEE_BPS)),
+  //   JSBI.BigInt(10000),
+  // );
+  // const profit = JSBI.subtract(quote.out, quote.in);
+  // const profitMinusFlashLoanFee = JSBI.subtract(profit, flashloanFee);
+  // return profitMinusFlashLoanFee;
+}
+
+async function calculateJupiterBestQuote(balancingLeg: SerializableLegFixed, mirroringLeg: SerializableLeg, balancingLegFirst: boolean, victimTxnSignature: string) {
+  const profitableQuotes: Quote[] = [];
+
+  try {
+    if (balancingLegFirst) {
+      const inputBase = JSBI.divide(JSBI.BigInt(balancingLeg.in), TWO)
+      const inputSteps = calculateSteppedInputs(inputBase, ARB_CALCULATION_NUM_STEPS);
+      const balancingLegQuotes = calculatedFixedLegQuotes(inputSteps, balancingLeg);
+      const mirroringLegQuotes = await Promise.all(balancingLegQuotes.map(q => fetchJupiterQuote(mirroringLeg.sourceMint, mirroringLeg.destinationMint, q.out.toString(), [balancingLeg.dex])))
+
+      for (const [i, q] of balancingLegQuotes.entries()) {
+        const mirroringLeg = mirroringLegQuotes[i]
+        const profit = JSBI.subtract(mirroringLeg.out, q.in)
+        if (JSBI.greaterThan(profit, ZERO)) {
+          profitableQuotes.push({
+            in: q.in,
+            out: mirroringLeg.out,
+            quote: mirroringLeg.quote
+          })
+        }
+      }
+    } else {
+      const inputBase = JSBI.divide(JSBI.BigInt(balancingLeg.estimatedOutExcludingFees), TWO);
+      const inputSteps = calculateSteppedInputs(inputBase, ARB_CALCULATION_NUM_STEPS);
+      const mirroringLegQuotes = await Promise.all(inputSteps.map(i => fetchJupiterQuote(mirroringLeg.sourceMint, mirroringLeg.destinationMint, i.toString(), [balancingLeg.dex])))
+      const balancingLegQuotes = calculatedFixedLegQuotes(mirroringLegQuotes.map(q => q?.out), balancingLeg)
+
+      for (const [i, q] of balancingLegQuotes.entries()) {
+        const mirroringLeg = mirroringLegQuotes[i]
+        const profit = JSBI.subtract(q.out, mirroringLeg.in)
+        if (JSBI.greaterThan(profit, ZERO)) {
+          profitableQuotes.push({
+            in: mirroringLeg.in,
+            out: q.out,
+            quote: mirroringLeg.quote
+          })
+        }
+      }
+    }
+  } catch (e) {
+    logger.error(e, 'Failed to calculate quotes')
+  }
+
+  // TODO:
+  // get the most profitable quote only
+  // filter out trades that are too small
+  // build and sign a bundle for that quote
+  // inAmount should check payer balance
+
+  logger.debug(`Found ${profitableQuotes.length} potential arbs for ${victimTxnSignature.slice(0, 4)}...`);
+  // find the best quote
+  const bestQuote = profitableQuotes.reduce((best, current) => {
+    const currentQuote = current[1];
+    const currentProfit = getProfitForQuote(currentQuote);
+    const bestQuote = best[1];
+    const bestProfit = getProfitForQuote(bestQuote);
+    if (JSBI.greaterThan(currentProfit, bestProfit)) {
+      return current;
+    } else {
+      return best;
+    }
+  });
+
+  const profit = getProfitForQuote(bestQuote);
+
+  const response: AmmCalcWorkerResultMessage = {
+    type: 'calculateJupiterBestQuote',
+    payload: {
+      quote: toSerializableQuote(bestQuote),
+      profit: profit.toString()
+    },
+  }
+
+  parentPort!.postMessage(response);
+}
+
 parentPort.on('message', (message: AmmCalcWorkerParamMessage) => {
   switch (message.type) {
     case 'addPool': {
@@ -246,6 +333,16 @@ parentPort.on('message', (message: AmmCalcWorkerParamMessage) => {
         calculateJupiterQuotes(balancingLeg, mirroringLeg, balancingLegFirst);
       } catch (e) {
         logger.error(e, 'Failed to calculate Jupiter quotes')
+      }
+      break;
+    }
+    case 'calculateJupiterBestQuote': {
+      const { balancingLeg, mirroringLeg, balancingLegFirst, victimTxnSignature } =
+        message.payload as CalculateJupiterBestQuoteParamPayload;
+      try {
+        calculateJupiterBestQuote(balancingLeg, mirroringLeg, balancingLegFirst, victimTxnSignature);
+      } catch (e) {
+        logger.error(e, 'Failed to calculate Jupiter best quote')
       }
       break;
     }
