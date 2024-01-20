@@ -30,7 +30,7 @@ import {
 import { IDL as JitoBomb } from "./clients/types/jito_bomb.js";
 import { BASE_MINTS_OF_INTEREST_B58 } from "./constants.js";
 import { Buffer } from "buffer";
-import { SerializableLegFixed } from "./markets/types";
+import { SerializableLegFixed } from "./markets/types.js";
 
 const TIP_ACCOUNTS = [
   '96gYZGLnJYVFmbjzopPSU6QiEV5fGqZNyN9nmNhvrZU5',
@@ -47,13 +47,9 @@ const getRandomTipAccount = () =>
   TIP_ACCOUNTS[Math.floor(Math.random() * TIP_ACCOUNTS.length)];
 
 const MIN_TIP_LAMPORTS = config.get('min_tip_lamports');
-const TIP_BPS = config.get('tip_bps');
 const MAX_TIP_BPS = config.get('max_tip_bps');
 const LEDGER_PROGRAM_ID = config.get('ledger_program')
 const TXN_FEES_LAMPORTS = config.get('txn_fees_lamports'); // transaction fees in lamports TODO: need to consider new token account rents?
-
-const MAX_USDC = 1200 * 10 ** 6
-const MAX_SOL = 12 * 10 ** 9
 
 // const MIN_BALANCE_RENT_EXEMPT_TOKEN_ACC =
 //   await getMinimumBalanceForRentExemptAccount(connection);
@@ -130,6 +126,7 @@ async function getAddressLookupTableAccounts(
 
 export type Arb = {
   bundle: VersionedTransaction[];
+  expectedProfit: JsbiType;
   trade: ArbIdeaTrade
   timings: Timings;
 };
@@ -149,34 +146,14 @@ async function* buildBundle(
   arbIdeaIterator: AsyncGenerator<ArbIdea>,
 ): AsyncGenerator<Arb> {
   for await (const arbIdea of arbIdeaIterator) {
-    const { txn, timings, trade } = arbIdea;
-    const { in: inAmount, out: outAmount, mirroringLegQuote, balancingLeg, balancingLegFirst } = trade;
-
-    // const mirroringLegRoutePlan = mirroringLegQuote.routePlan
-    const baseMint = balancingLegFirst ? balancingLeg.sourceMint : balancingLeg.destinationMint
-
-    // todo: should put this logic in quote calculator
-    let inAmountNumber = JSBI.toNumber(inAmount)
-    inAmountNumber = baseMint === BASE_MINTS_OF_INTEREST_B58.SOL ? Math.min(inAmountNumber, MAX_SOL) : Math.min(inAmountNumber, MAX_USDC)
-    // scale down
-    const inAmountBN = JSBI.BigInt(inAmountNumber)
-    const outAmountBN = JSBI.divide(JSBI.multiply(inAmountBN, outAmount), inAmount)
-    // filter out trades that are too small
-    if (baseMint === BASE_MINTS_OF_INTEREST_B58.SOL) {
-      if (JSBI.lessThan(inAmount, JSBI.BigInt(100_000_000))) {
-        continue
-      }
-    } else if (baseMint === BASE_MINTS_OF_INTEREST_B58.USDC) {
-      if (JSBI.lessThan(inAmount, JSBI.BigInt(5_000_000))) {
-        continue
-      }
-    }
+    const { txn, expectedProfit, timings, trade, } = arbIdea;
+    const { in: inAmount, out: outAmount, mirroringLegQuote, balancingLeg, balancingLegFirst, tipBps } = trade;
 
     const allRoutesQuoteResponse = createAllRoutesQuoteResponse(
       {
         mirroringLegQuote,
-        inAmount: inAmountBN,
-        outAmount: outAmountBN,
+        inAmount: inAmount,
+        outAmount: outAmount,
         balancingLeg,
         balancingLegFirst
       }
@@ -189,9 +166,10 @@ async function* buildBundle(
       backrunningTx = await compileJupiterTransaction(
         {
           quoteResponse: allRoutesQuoteResponse,
-          inAmount: inAmountBN,
+          inAmount: inAmount,
           balancingLeg,
           balancingLegFirst,
+          tipBps,
           wallet,
           blockhash: txn.message.recentBlockhash,
         }
@@ -204,18 +182,19 @@ async function* buildBundle(
       continue
     }
 
-    const res = await connection.simulateTransaction(backrunningTx, {
-      replaceRecentBlockhash: false,
-      commitment: "confirmed",
-    })
-
-    logger.info({ res }, "simulateTransaction")
+    // const res = await connection.simulateTransaction(backrunningTx, {
+    //   replaceRecentBlockhash: false,
+    //   commitment: "confirmed",
+    // })
+    //
+    // logger.info({ res }, "simulateTransaction")
 
     // construct bundle
     const bundle = [txn, backrunningTx];
 
     yield {
       bundle,
+      expectedProfit,
       trade,
       timings: {
         mempoolEnd: timings.mempoolEnd,
@@ -292,6 +271,7 @@ async function compileJupiterTransaction(
     inAmount,
     balancingLeg,
     balancingLegFirst,
+    tipBps,
     wallet,
     blockhash
   }:
@@ -300,6 +280,7 @@ async function compileJupiterTransaction(
       inAmount: JsbiType,
       balancingLeg: SerializableLegFixed,
       balancingLegFirst: boolean,
+      tipBps: number,
       wallet: anchor.Wallet,
       blockhash: string,
     }
@@ -409,7 +390,7 @@ async function compileJupiterTransaction(
       randomSeed,
       new BN(minimumProfitInBaseToken), // minimum profit in base token
       lamportsPerBaseToken,
-      new BN(TIP_BPS), // tip bps of the (profit minus minimum profit in base token) TODO: dynamic tip in custom program
+      new BN(tipBps), // tip bps of the (profit minus minimum profit in base token) TODO: dynamic tip in custom program
       new BN(MAX_TIP_BPS), // max tip bps of the sol balance
       new BN(MIN_TIP_LAMPORTS), // requires tip > min tip amount
     )

@@ -6,6 +6,7 @@ import {
   SerializableAccountInfo,
   SerializableQuote
 } from './types.js';
+
 const JSBI = defaultImport(jsbi);
 
 function toPairString(mintA: string, mintB: string): string {
@@ -43,7 +44,7 @@ function toAccountInfo(
 
 function toSerializableQuote(quote: Quote): SerializableQuote {
   return {
-    in: quote.in.toString(), out: quote.out.toString(), quote: quote.quote
+    in: quote.in.toString(), out: quote.out.toString(), tipBps: quote.tipBps, quote: quote.quote
   };
 }
 
@@ -51,6 +52,7 @@ function toQuote(quote: SerializableQuote): Quote {
   return {
     in: JSBI.BigInt(quote.in),
     out: JSBI.BigInt(quote.out),
+    tipBps: quote.tipBps,
     quote: quote.quote
   }
 }

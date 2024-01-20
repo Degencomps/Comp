@@ -7,9 +7,6 @@ import { searcherClient } from './clients/jito.js';
 import { connection } from './clients/rpc.js';
 import { logger } from './logger.js';
 import { MAX_TRADE_AGE_MS } from "./calculate-arb.js";
-import { config } from "./config.js";
-
-const TIP_BPS = config.get('tip_bps');
 
 const CHECK_LANDED_DELAY_MS = 30000;
 
@@ -32,6 +29,7 @@ type TradeCSV = {
   txn0Signature: string;
   txn1Signature: string;
   trade: string;
+  expectedProfit: string;
   tipBps: string;
   mempoolEnd: number;
   preSimEnd: number;
@@ -84,7 +82,8 @@ async function processCompletedTrade(uuid: string) {
     txn0Signature,
     txn1Signature,
     trade: JSON.stringify(trade.trade),
-    tipBps: TIP_BPS.toString(),
+    expectedProfit: trade.expectedProfit.toString(),
+    tipBps: trade.trade.tipBps.toString(),
     mempoolEnd: trade.timings.mempoolEnd,
     preSimEnd: trade.timings.preSimEnd,
     simEnd: trade.timings.simEnd,
@@ -135,6 +134,7 @@ async function sendBundle(bundleIterator: AsyncGenerator<Arb>): Promise<void> {
 
   for await (const {
     bundle,
+    expectedProfit,
     trade,
     timings,
   } of bundleIterator) {
@@ -170,6 +170,7 @@ async function sendBundle(bundleIterator: AsyncGenerator<Arb>): Promise<void> {
 
         bundlesInTransit.set(bundleId, {
           bundle,
+          expectedProfit,
           accepted: 0,
           rejected: false,
           errorType: null,
@@ -222,7 +223,8 @@ async function sendBundle(bundleIterator: AsyncGenerator<Arb>): Promise<void> {
           txn0Signature,
           txn1Signature,
           trade: JSON.stringify(trade),
-          tipBps: TIP_BPS.toString(),
+          expectedProfit: expectedProfit.toString(),
+          tipBps: trade.tipBps.toString(),
           mempoolEnd: timings.mempoolEnd,
           preSimEnd: timings.preSimEnd,
           simEnd: timings.simEnd,

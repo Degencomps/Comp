@@ -16,12 +16,16 @@ import {
   SerializableLegFixed,
 } from './types.js';
 import { toAccountInfo, toSerializableQuote } from './utils.js';
+import { BASE_MINTS_OF_INTEREST_B58 } from "../constants.js";
 
 const ARB_CALCULATION_NUM_STEPS = JSBI.BigInt(config.get('arb_calculation_num_steps'));
 const ZERO = JSBI.BigInt(0);
 const TWO = JSBI.BigInt(2);
 const SCALING_FACTOR = JSBI.BigInt(10000);
 const BPS_MULTIPLIER = JSBI.BigInt(10000);
+
+const MAX_USDC_BALANCE = 1200 * 10 ** 6
+const MAX_SOL_BALANCE = 12 * 10 ** 9
 
 const workerId = workerData.workerId;
 
@@ -96,7 +100,7 @@ async function fetchJupiterQuote(sourceMint: string, destinationMint: string, am
       outputMint: destinationMint,
       amount: Math.floor(parseFloat(amountIn)),
       slippageBps: 0,
-      onlyDirectRoutes: false,
+      onlyDirectRoutes: true,
       asLegacyTransaction: true,
       excludeDexes: ["Perps", ..._excludeDexes]
     })
@@ -165,7 +169,7 @@ function calculateSteppedInputs(inputBase: JsbiType, steps: JsbiType): JsbiType[
   return new Array(steps).map((_, i) => JSBI.add(inputBase, JSBI.multiply(stepSize, JSBI.BigInt(i))));
 }
 
-function calculatedFixedLegQuotes(inputSteps: JsbiType[], balancingLeg: SerializableLegFixed): Omit<Quote, 'quote'>[] {
+function calculatedFixedLegQuotes(inputSteps: JsbiType[], balancingLeg: SerializableLegFixed): Omit<Quote, 'quote' | 'tipBps'>[] {
   return inputSteps
     .map(i => calculateFixedLegQuote(i, balancingLeg.marketId, JSBI.BigInt(balancingLeg.in), JSBI.BigInt(balancingLeg.estimatedOutExcludingFees)))
 }
@@ -181,6 +185,9 @@ async function calculateJupiterQuotes(balancingLeg: SerializableLegFixed, mirror
       const balancingLegQuotes = calculatedFixedLegQuotes(inputSteps, balancingLeg);
       const mirroringLegQuotes = await Promise.all(balancingLegQuotes.map(q => fetchJupiterQuote(mirroringLeg.sourceMint, mirroringLeg.destinationMint, q.out.toString(), [balancingLeg.dex])))
 
+      // tipping base on the balancing in TODO: improve this from analysis
+      const tipBps = getTipBpsFromInAmount(JSBI.BigInt(balancingLeg.in), balancingLeg.sourceMint)
+
       for (const [i, q] of balancingLegQuotes.entries()) {
         const mirroringLeg = mirroringLegQuotes[i]
         const profit = JSBI.subtract(mirroringLeg.out, q.in)
@@ -188,6 +195,7 @@ async function calculateJupiterQuotes(balancingLeg: SerializableLegFixed, mirror
           profitableQuotes.push({
             in: q.in,
             out: mirroringLeg.out,
+            tipBps,
             quote: mirroringLeg.quote
           })
         }
@@ -198,6 +206,9 @@ async function calculateJupiterQuotes(balancingLeg: SerializableLegFixed, mirror
       const mirroringLegQuotes = await Promise.all(inputSteps.map(i => fetchJupiterQuote(mirroringLeg.sourceMint, mirroringLeg.destinationMint, i.toString(), [balancingLeg.dex])))
       const balancingLegQuotes = calculatedFixedLegQuotes(mirroringLegQuotes.map(q => q?.out), balancingLeg)
 
+      // tipping base on the balancing estimatedOutExcludingFees TODO: improve this from analysis
+      const tipBps = getTipBpsFromInAmount(JSBI.BigInt(balancingLeg.estimatedOutExcludingFees), balancingLeg.destinationMint)
+
       for (const [i, q] of balancingLegQuotes.entries()) {
         const mirroringLeg = mirroringLegQuotes[i]
         const profit = JSBI.subtract(q.out, mirroringLeg.in)
@@ -205,6 +216,7 @@ async function calculateJupiterQuotes(balancingLeg: SerializableLegFixed, mirror
           profitableQuotes.push({
             in: mirroringLeg.in,
             out: q.out,
+            tipBps,
             quote: mirroringLeg.quote
           })
         }
@@ -241,32 +253,78 @@ function getProfitForQuote(quote: Quote) {
   // return profitMinusFlashLoanFee;
 }
 
+function getTipBpsFromInAmount(inAmount: JsbiType, sourceMint: string) {
+  // tipping base on the balancing in TODO: improve this from analysis
+  let tipBps = 5250
+  if (sourceMint === BASE_MINTS_OF_INTEREST_B58.SOL) {
+    if (JSBI.greaterThan(inAmount, JSBI.BigInt(1_000_000_000))) {
+      tipBps = 6250
+    }
+    if (JSBI.greaterThan(inAmount, JSBI.BigInt(3_000_000_000))) {
+      tipBps = 8250
+    }
+  } else if (sourceMint === BASE_MINTS_OF_INTEREST_B58.USDC) {
+    if (JSBI.greaterThan(inAmount, JSBI.BigInt(100_000_000))) {
+      tipBps = 6250
+    }
+    if (JSBI.greaterThan(inAmount, JSBI.BigInt(300_000_000))) {
+      tipBps = 8250
+    }
+  }
+
+  return tipBps
+}
+
 async function calculateJupiterBestQuote(balancingLeg: SerializableLegFixed, mirroringLeg: SerializableLeg, balancingLegFirst: boolean, victimTxnSignature: string) {
   const profitableQuotes: Quote[] = [];
 
   try {
     if (balancingLegFirst) {
-      const inputBase = JSBI.divide(JSBI.BigInt(balancingLeg.in), TWO)
+      let inputBase = JSBI.divide(JSBI.BigInt(balancingLeg.in), TWO)
+
+      // cap at max balance
+      if (balancingLeg.sourceMint === BASE_MINTS_OF_INTEREST_B58.SOL) {
+        inputBase = JSBI.BigInt(Math.min(MAX_SOL_BALANCE, JSBI.toNumber(inputBase)))
+      } else if (balancingLeg.sourceMint === BASE_MINTS_OF_INTEREST_B58.USDC) {
+        inputBase = JSBI.BigInt(Math.min(MAX_USDC_BALANCE, JSBI.toNumber(inputBase)))
+      }
+
       const inputSteps = calculateSteppedInputs(inputBase, ARB_CALCULATION_NUM_STEPS);
       const balancingLegQuotes = calculatedFixedLegQuotes(inputSteps, balancingLeg);
       const mirroringLegQuotes = await Promise.all(balancingLegQuotes.map(q => fetchJupiterQuote(mirroringLeg.sourceMint, mirroringLeg.destinationMint, q.out.toString(), [balancingLeg.dex])))
 
+      // tipping base on the balancing in TODO: improve this from analysis
+      const tipBps = getTipBpsFromInAmount(JSBI.BigInt(balancingLeg.in), balancingLeg.sourceMint)
+
       for (const [i, q] of balancingLegQuotes.entries()) {
         const mirroringLeg = mirroringLegQuotes[i]
         const profit = JSBI.subtract(mirroringLeg.out, q.in)
+
         if (JSBI.greaterThan(profit, ZERO)) {
           profitableQuotes.push({
             in: q.in,
             out: mirroringLeg.out,
+            tipBps,
             quote: mirroringLeg.quote
           })
         }
       }
     } else {
-      const inputBase = JSBI.divide(JSBI.BigInt(balancingLeg.estimatedOutExcludingFees), TWO);
+      let inputBase = JSBI.divide(JSBI.BigInt(balancingLeg.estimatedOutExcludingFees), TWO);
+
+      // cap at max balance
+      if (balancingLeg.destinationMint === BASE_MINTS_OF_INTEREST_B58.SOL) {
+        inputBase = JSBI.BigInt(Math.min(MAX_SOL_BALANCE, JSBI.toNumber(inputBase)))
+      } else if (balancingLeg.destinationMint === BASE_MINTS_OF_INTEREST_B58.USDC) {
+        inputBase = JSBI.BigInt(Math.min(MAX_USDC_BALANCE, JSBI.toNumber(inputBase)))
+      }
+
       const inputSteps = calculateSteppedInputs(inputBase, ARB_CALCULATION_NUM_STEPS);
       const mirroringLegQuotes = await Promise.all(inputSteps.map(i => fetchJupiterQuote(mirroringLeg.sourceMint, mirroringLeg.destinationMint, i.toString(), [balancingLeg.dex])))
       const balancingLegQuotes = calculatedFixedLegQuotes(mirroringLegQuotes.map(q => q?.out), balancingLeg)
+
+      // tipping base on the balancing estimatedOutExcludingFees TODO: improve this from analysis
+      const tipBps = getTipBpsFromInAmount(JSBI.BigInt(balancingLeg.estimatedOutExcludingFees), balancingLeg.destinationMint)
 
       for (const [i, q] of balancingLegQuotes.entries()) {
         const mirroringLeg = mirroringLegQuotes[i]
@@ -275,6 +333,7 @@ async function calculateJupiterBestQuote(balancingLeg: SerializableLegFixed, mir
           profitableQuotes.push({
             in: mirroringLeg.in,
             out: q.out,
+            tipBps,
             quote: mirroringLeg.quote
           })
         }
@@ -287,8 +346,7 @@ async function calculateJupiterBestQuote(balancingLeg: SerializableLegFixed, mir
   // TODO:
   // get the most profitable quote only
   // filter out trades that are too small
-  // build and sign a bundle for that quote
-  // inAmount should check payer balance
+  // dynamic tipping bps based on expected profit
 
   if (profitableQuotes.length === 0) {
     const response: AmmCalcWorkerResultMessage = {

@@ -34,6 +34,7 @@ export const MAX_TRADE_AGE_MS = 200;
 export type ArbIdeaTrade = {
   in: JsbiType,
   out: JsbiType, // can ignore?
+  tipBps: number,
   mirroringLegQuote: QuoteResponse,
   balancingLeg: SerializableLegFixed,
   balancingLegFirst: boolean
@@ -185,7 +186,7 @@ in ${timings.postSimEnd - timings.mempoolEnd}ms`);
       `Potential arb: profit ${profitDecimals} ${backrunSourceMintName} on ${originalMarket.dexLabel
       } ::: BUY ${arbSizeDecimals} on ${marketsString} backrunning ${bs58.encode(
         txn.signatures[0],
-      )} in ${Date.now() - timings.mempoolEnd}ms`,
+      )} tip ${bestQuote.tipBps} in ${Date.now() - timings.mempoolEnd}ms`,
     );
 
     yield {
@@ -194,6 +195,7 @@ in ${timings.postSimEnd - timings.mempoolEnd}ms`);
       trade: {
         in: bestQuote.in,
         out: bestQuote.out,
+        tipBps: bestQuote.tipBps,
         mirroringLegQuote: bestQuote.quote,
         balancingLeg,
         balancingLegFirst

@@ -94,39 +94,39 @@ export type CalculateJupiterBestQuoteResultPayload = {
 
 export type AmmCalcWorkerParamMessage =
   | {
-    type: 'addPool';
-    payload: AddPoolParamPayload;
-  }
+  type: 'addPool';
+  payload: AddPoolParamPayload;
+}
   | {
-    type: 'calculateQuote';
-    payload: CalculateQuoteParamPayload;
-  }
+  type: 'calculateQuote';
+  payload: CalculateQuoteParamPayload;
+}
   | {
-    type: 'calculateJupiterQuotes',
-    payload: CalculateJupiterQuotesParamPayload;
-  }
+  type: 'calculateJupiterQuotes',
+  payload: CalculateJupiterQuotesParamPayload;
+}
   | {
   type: 'calculateJupiterBestQuote',
   payload: CalculateJupiterBestQuoteParamPayload;
-  };
+};
 
 export type AmmCalcWorkerResultMessage =
   | {
-    type: 'addPool';
-    payload: AddPoolResultPayload;
-  }
+  type: 'addPool';
+  payload: AddPoolResultPayload;
+}
   | {
-    type: 'calculateQuote';
-    payload: CalculateQuoteResultPayload;
-  }
+  type: 'calculateQuote';
+  payload: CalculateQuoteResultPayload;
+}
   | {
-    type: 'calculateJupiterQuotes',
-    payload: CalculateJupiterQuotesResultPayload;
-  }
+  type: 'calculateJupiterQuotes',
+  payload: CalculateJupiterQuotesResultPayload;
+}
   | {
   type: 'calculateJupiterBestQuote',
   payload: CalculateJupiterBestQuoteResultPayload;
-  };
+};
 
 export type SerializableAccountInfo = {
   executable: boolean;
@@ -166,10 +166,11 @@ export type SerializableLegFixed = SerializableLeg & {
   estimatedOutExcludingFees: string
 };
 
-export type Quote = { in: JsbiType; out: JsbiType; quote: QuoteResponse };
+export type Quote = { in: JsbiType; out: JsbiType; tipBps: number; quote: QuoteResponse };
 
 export type SerializableQuote = {
   in: string;
   out: string;
+  tipBps: number;
   quote: QuoteResponse
 };
