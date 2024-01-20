@@ -184,16 +184,25 @@ async function* buildBundle(
 
     logger.debug({ allRoutesQuoteResponse }, "all routes quote")
 
-    const backrunningTx = await compileJupiterTransaction(
-      {
-        quoteResponse: allRoutesQuoteResponse,
-        inAmount: inAmountBN,
-        balancingLeg,
-        balancingLegFirst,
-        wallet,
-        blockhash: txn.message.recentBlockhash,
-      }
-    )
+    let backrunningTx: VersionedTransaction
+    try {
+      backrunningTx = await compileJupiterTransaction(
+        {
+          quoteResponse: allRoutesQuoteResponse,
+          inAmount: inAmountBN,
+          balancingLeg,
+          balancingLegFirst,
+          wallet,
+          blockhash: txn.message.recentBlockhash,
+        }
+      )
+    } catch (e) {
+      logger.debug({ e }, "error compileJupiterTransaction")
+    }
+
+    if (!backrunningTx) {
+      continue
+    }
 
     const res = await connection.simulateTransaction(backrunningTx, {
       replaceRecentBlockhash: false,
