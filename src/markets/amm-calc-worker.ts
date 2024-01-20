@@ -290,6 +290,15 @@ async function calculateJupiterBestQuote(balancingLeg: SerializableLegFixed, mir
   // build and sign a bundle for that quote
   // inAmount should check payer balance
 
+  if (profitableQuotes.length === 0) {
+    const response: AmmCalcWorkerResultMessage = {
+      type: 'calculateJupiterBestQuote',
+      payload: null,
+    }
+    parentPort!.postMessage(response);
+    return;
+  }
+
   logger.debug(`Found ${profitableQuotes.length} potential arbs for ${victimTxnSignature.slice(0, 4)}...`);
   // find the best quote
   const bestQuote = profitableQuotes.reduce((best, current) => {

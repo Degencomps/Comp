@@ -260,6 +260,9 @@ async function calculateJupiterBestQuote(
   if (result === null) return null;
 
   const payload = result.payload as CalculateJupiterBestQuoteResultPayload;
+
+  if (payload === null) return null;
+
   const quote = toQuote(payload.quote)
 
   return {

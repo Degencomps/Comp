@@ -88,7 +88,7 @@ export type CalculateJupiterQuotesResultPayload = {
 }
 
 export type CalculateJupiterBestQuoteResultPayload = {
-  quote: SerializableQuote | null;
+  quote: SerializableQuote;
   profit: string;
 }
 
