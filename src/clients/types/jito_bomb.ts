@@ -169,6 +169,11 @@ export type JitoBomb = {
     },
     {
       "code": 6007,
+      "name": "NoProfitMade",
+      "msg": "No Profit Made"
+    },
+    {
+      "code": 6008,
       "name": "UnknownInstruction",
       "msg": "Unknown Instruction"
     }
@@ -346,6 +351,11 @@ export const IDL: JitoBomb = {
     },
     {
       "code": 6007,
+      "name": "NoProfitMade",
+      "msg": "No Profit Made"
+    },
+    {
+      "code": 6008,
       "name": "UnknownInstruction",
       "msg": "Unknown Instruction"
     }

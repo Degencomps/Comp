@@ -264,7 +264,7 @@ function getTipBpsFromInAmount(inAmount: JsbiType, sourceMint: string) {
       tipBps = 7300
     }
     if (JSBI.greaterThan(inAmount, JSBI.BigInt(3_000_000_000))) {
-      tipBps = 8300
+      tipBps = 8550
     }
   } else if (sourceMint === BASE_MINTS_OF_INTEREST_B58.USDC) {
     if (JSBI.greaterThan(inAmount, JSBI.BigInt(100_000_000))) {
@@ -274,7 +274,7 @@ function getTipBpsFromInAmount(inAmount: JsbiType, sourceMint: string) {
       tipBps = 7300
     }
     if (JSBI.greaterThan(inAmount, JSBI.BigInt(300_000_000))) {
-      tipBps = 8300
+      tipBps = 8550
     }
   }
 
