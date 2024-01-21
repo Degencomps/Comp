@@ -3,7 +3,7 @@ import { logger } from './logger.js';
 import { Timings } from './types.js';
 //import { SearcherClient } from 'jito-ts/dist/sdk/block-engine/searcher.js';
 import { searcher } from 'jito-ts';
-import { searcherClients } from './clients/jito.js';
+import { searcherClientManager } from './clients/jito.js';
 import { JupiterDexProgramLabelMap } from './markets/jupiter/index.js';
 import { SPL_TOKEN_SWAP_DEXES } from './markets/spl-token-swap/index.js';
 import { fuseGenerators } from './utils.js';
@@ -32,9 +32,8 @@ async function* mempool(): AsyncGenerator<MempoolUpdate> {
   const generators: AsyncGenerator<VersionedTransaction[]>[] = [];
 
   try {
-    for (const searcherClient of searcherClients) {
-      generators.push(getProgramUpdates(searcherClient));
-    }
+    // subscribe to the default client
+    generators.push(getProgramUpdates(searcherClientManager.getDefaultClient()));
 
     // subscribing to multiple mempools is in particular useful in europe (frankfurt and amsterdam)
     const updates = fuseGenerators(generators);
@@ -56,7 +55,6 @@ async function* mempool(): AsyncGenerator<MempoolUpdate> {
   } catch (e) {
     logger.error({ e }, 'mempool error');
   }
-
 
 }
 

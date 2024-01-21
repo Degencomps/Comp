@@ -52,16 +52,6 @@ class RoundRobinSearcherClientManager {
   }
 }
 
-// todo: for yamen, what would happen when there are multiple clients in mempool?
-const searcherClients: searcher.SearcherClient[] = [];
-
-for (const url of BLOCK_ENGINE_URLS) {
-  const client = searcher.searcherClient(url, keypairs[0], {
-    'grpc.keepalive_timeout_ms': 4000,
-  });
-  searcherClients.push(client);
-}
-
 // const geyserClient = jitoGeyserClient(GEYSER_URL, GEYSER_ACCESS_TOKEN, {
 //   'grpc.keepalive_timeout_ms': 4000,
 // });
@@ -72,4 +62,4 @@ for (const url of BLOCK_ENGINE_URLS) {
 
 const searcherClientManager = new RoundRobinSearcherClientManager(BLOCK_ENGINE_URLS, keypairs);
 
-export { searcherClientManager, searcherClients }; //, geyserClient };
+export { searcherClientManager };
