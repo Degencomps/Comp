@@ -13,7 +13,7 @@ import { logger } from './logger.js';
 import {
   calculateJupiterBestQuote as workerCalculateJupiterBestQuote,
 } from './markets/index.js';
-import { SerializableLeg, SerializableLegFixed } from './markets/types.js';
+import { BestQuote, SerializableLeg, SerializableLegFixed } from './markets/types.js';
 import { BackrunnableTrade } from './post-simulation-filter.js';
 import { JsbiType, Timings } from './types.js';
 import { prioritize, toDecimalString } from './utils.js';
@@ -158,12 +158,18 @@ in ${timings.postSimEnd - timings.mempoolEnd}ms`);
       destinationMint: balancingLeg.sourceMint,
     }
 
-    const bestQuoteResult = await workerCalculateJupiterBestQuote({
-      balancingLeg,
-      mirroringLeg,
-      balancingLegFirst,
-      victimTxnSignature: bs58.encode(txn.signatures[0])
-    }, MAX_ARB_CALCULATION_TIME_MS);
+    let bestQuoteResult: BestQuote
+    try {
+      bestQuoteResult = await workerCalculateJupiterBestQuote({
+        balancingLeg,
+        mirroringLeg,
+        balancingLegFirst,
+        victimTxnSignature: bs58.encode(txn.signatures[0])
+      }, MAX_ARB_CALCULATION_TIME_MS);
+
+    } catch (e) {
+      logger.error({ e }, "error workerCalculateJupiterBestQuote")
+    }
 
     if (bestQuoteResult === null) continue;
 

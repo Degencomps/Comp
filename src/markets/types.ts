@@ -174,3 +174,8 @@ export type SerializableQuote = {
   tipBps: number;
   quote: QuoteResponse
 };
+
+export type BestQuote = {
+  quote: Quote;
+  profit: string;
+}

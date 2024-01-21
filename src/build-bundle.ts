@@ -417,10 +417,7 @@ async function compileJupiterTransaction(
     instructions.push(closeWrappedSolAccountIx)
   }
 
-  const addressLookupTableAccounts: AddressLookupTableAccount[] = [];
-  addressLookupTableAccounts.push(
-    ...(await getAddressLookupTableAccounts(allSwapInstructionsResponse.addressLookupTableAddresses))
-  );
+  const addressLookupTableAccounts = await getAddressLookupTableAccounts(allSwapInstructionsResponse.addressLookupTableAddresses)
 
   const messageV0 = new TransactionMessage({
     payerKey: wallet.publicKey,

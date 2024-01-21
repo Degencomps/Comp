@@ -10,7 +10,7 @@ import { SplTokenSwapDEX } from './spl-token-swap/index.js';
 import {
   AddPoolResultPayload,
   AmmCalcWorkerParamMessage,
-  AmmCalcWorkerResultMessage, CalculateJupiterBestQuoteParamPayload, CalculateJupiterBestQuoteResultPayload,
+  AmmCalcWorkerResultMessage, BestQuote, CalculateJupiterBestQuoteParamPayload, CalculateJupiterBestQuoteResultPayload,
   CalculateJupiterQuotesParamPayload,
   CalculateJupiterQuotesResultPayload,
   DEX,
@@ -244,10 +244,7 @@ async function calculateJupiterQuotes(
 async function calculateJupiterBestQuote(
   request: CalculateJupiterBestQuoteParamPayload,
   timeout?: number,
-): Promise<{
-  quote: Quote;
-  profit: string;
-} | null> {
+): Promise<BestQuote | null> {
   const message: AmmCalcWorkerParamMessage = {
     type: 'calculateJupiterBestQuote',
     payload: request,
