@@ -69,7 +69,7 @@ async function sendSimulations(
         // ignore the too many account locks error
         const message = e.message as string
         if (!message.includes('TooManyAccountLocks') && !message.includes('AccountLoadedTwice')) {
-          logger.error(e.message);
+          logger.error({ message: e.message }, "Error simulating bundle");
         }
         simulationResults.push({
           txn,
@@ -79,9 +79,9 @@ async function sendSimulations(
         });
 
       }).finally(() => {
-        pendingSimulations -= 1;
-        eventEmitter.emit(RECEIVED_SIMULATION_RESULT_EVENT);
-      });
+      pendingSimulations -= 1;
+      eventEmitter.emit(RECEIVED_SIMULATION_RESULT_EVENT);
+    });
   }
 }
 
