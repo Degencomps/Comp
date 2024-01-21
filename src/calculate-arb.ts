@@ -23,6 +23,10 @@ const JSBI = defaultImport(jsbi);
 const MAX_ARB_CALCULATION_TIME_MS = config.get('max_arb_calculation_time_ms');
 const HIGH_WATER_MARK = 500;
 
+const MINIMUM_SOL_TRADE_SIZE = JSBI.BigInt(1_500_000_000); // 1 sol
+const MINIMUM_USDC_TRADE_SIZE = JSBI.BigInt(100_000_000); // 100 usdc
+const MINIMUM_PRICE_IMPACT_PCT = 5; // 5%
+
 const USDC_SOL_PRICE = 100;
 // ratio in lamports
 // multiply by 1000 since USDC is 6 decimals and SOL is 9 decimals to get lamport for lamport equivalence
@@ -158,12 +162,33 @@ in ${timings.postSimEnd - timings.mempoolEnd}ms`);
       destinationMint: balancingLeg.sourceMint,
     }
 
+    const sourceIsUsdc = USDC_MINT_STRING === backrunSourceMint;
+
+    // skip if original trade size is too small
+    if (sourceIsUsdc) {
+      if (JSBI.lessThan(tradeSizeBase, MINIMUM_USDC_TRADE_SIZE)) {
+        logger.debug(`Skipping arb idea bcs trade size is too small`);
+        continue;
+      }
+    } else {
+      if (JSBI.lessThan(tradeSizeBase, MINIMUM_SOL_TRADE_SIZE)) {
+        logger.debug(`Skipping arb idea bcs trade size is too small`);
+        continue;
+      }
+    }
+
+    // skip if price impact is too small
+    if (priceImpactPct < MINIMUM_PRICE_IMPACT_PCT) {
+      logger.debug(`Skipping arb idea bcs price impact is too small`);
+      continue;
+    }
+
     const bestQuoteResult = await workerCalculateJupiterBestQuote({
-        balancingLeg,
-        mirroringLeg,
-        balancingLegFirst,
-        victimTxnSignature: bs58.encode(txn.signatures[0])
-      }, MAX_ARB_CALCULATION_TIME_MS);
+      balancingLeg,
+      mirroringLeg,
+      balancingLegFirst,
+      victimTxnSignature: bs58.encode(txn.signatures[0])
+    }, MAX_ARB_CALCULATION_TIME_MS);
 
     if (bestQuoteResult === null) continue;
 
@@ -171,7 +196,6 @@ in ${timings.postSimEnd - timings.mempoolEnd}ms`);
 
     const profitBN = JSBI.BigInt(profit)
 
-    const sourceIsUsdc = USDC_MINT_STRING === backrunSourceMint;
     const decimals = sourceIsUsdc ? USDC_DECIMALS : SOL_DECIMALS;
     const backrunSourceMintName = sourceIsUsdc ? 'USDC' : 'SOL';
 
