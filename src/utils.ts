@@ -189,7 +189,7 @@ async function* fuseGenerators<T>(
     yield result.value;
     generatorPromises[generatorIndex] = gens[generatorIndex]
       .next()
-      .then((result) => ({ result, generatorIndex }));
+      .then((result) => ({ result, generatorIndex }))
   }
 }
 

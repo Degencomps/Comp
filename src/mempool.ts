@@ -26,32 +26,38 @@ const getProgramUpdates = (searcherClient: searcher.SearcherClient) =>
   searcherClient.programUpdates(PROGRAMS_OF_INTEREST, [], (error) => {
     logger.error({ error }, 'programUpdates error');
     throw error;
-  });
+  })
 
 async function* mempool(): AsyncGenerator<MempoolUpdate> {
   const generators: AsyncGenerator<VersionedTransaction[]>[] = [];
 
-  for (const searcherClient of searcherClients) {
-    generators.push(getProgramUpdates(searcherClient));
+  try {
+    for (const searcherClient of searcherClients) {
+      generators.push(getProgramUpdates(searcherClient));
+    }
+
+    // subscribing to multiple mempools is in particular useful in europe (frankfurt and amsterdam)
+    const updates = fuseGenerators(generators);
+
+    for await (const update of updates) {
+      yield {
+        txns: update,
+        timings: {
+          mempoolEnd: Date.now(),
+          preSimEnd: 0,
+          simEnd: 0,
+          postSimEnd: 0,
+          calcArbEnd: 0,
+          buildBundleEnd: 0,
+          bundleSent: 0,
+        },
+      };
+    }
+  } catch (e) {
+    logger.error({ e }, 'mempool error');
   }
 
-  // subscribing to multiple mempools is in particular useful in europe (frankfurt and amsterdam)
-  const updates = fuseGenerators(generators);
 
-  for await (const update of updates) {
-    yield {
-      txns: update,
-      timings: {
-        mempoolEnd: Date.now(),
-        preSimEnd: 0,
-        simEnd: 0,
-        postSimEnd: 0,
-        calcArbEnd: 0,
-        buildBundleEnd: 0,
-        bundleSent: 0,
-      },
-    };
-  }
 }
 
 export { MempoolUpdate, mempool };
