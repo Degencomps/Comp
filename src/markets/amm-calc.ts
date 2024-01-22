@@ -1,5 +1,4 @@
-import { Amm, ammFactory } from '@jup-ag/core';
-import { AccountInfo, PublicKey } from '@solana/web3.js';
+import { AccountInfo } from '@solana/web3.js';
 import { jupiterClient } from '../clients/jupiter.js';
 import { config } from '../config.js';
 import { BASE_MINTS_OF_INTEREST_B58 } from "../constants.js";
@@ -21,47 +20,47 @@ const BPS_MULTIPLIER = JSBI.BigInt(10000);
 const MAX_USDC_BALANCE = 1200 * 10 ** 6
 const MAX_SOL_BALANCE = 12 * 10 ** 9
 
-const pools: Map<string, Amm> = new Map();
-const accountsForUpdateForPool: Map<string, string[]> = new Map();
-const ammsForAccount: Map<string, string[]> = new Map();
-const ammIsInitialized: Map<string, boolean> = new Map();
+// const pools: Map<string, Amm> = new Map();
+// const accountsForUpdateForPool: Map<string, string[]> = new Map();
+// const ammsForAccount: Map<string, string[]> = new Map();
+// const ammIsInitialized: Map<string, boolean> = new Map();
 const feeForAmm: Map<string, number> = new Map();
 
 export function addPool(
   poolLabel: JupiterDexProgramLabel,
   id: string,
-  accountInfo: AccountInfo<Buffer>,
+  _accountInfo: AccountInfo<Buffer>,
   feeRateBps: number,
-  params?: any,
+  _params?: any,
 ) {
   logger.trace(`Adding pool ${id} with label ${poolLabel}`);
 
-  let accountsForUpdate: string[] = [];
+  const accountsForUpdate: string[] = [];
 
-  // this isn't even stricktly needed
-  try {
-    if (poolLabel !== 'Raydium CLMM') {
-      const amm = ammFactory(new PublicKey(id), accountInfo, params);
-      pools.set(id, amm);
+  // // this isn't even stricktly needed
+  // try {
+  //   if (poolLabel !== 'Raydium CLMM') {
+  //     const amm = ammFactory(new PublicKey(id), accountInfo, params);
+  //     pools.set(id, amm);
 
-      const accountsForUpdateWithDuplicates = amm
-        .getAccountsForUpdate()
-        .map((a) => a.toBase58());
-      accountsForUpdate = Array.from(
-        new Set(accountsForUpdateWithDuplicates),
-      );
-      const needsAccounts = accountsForUpdate.length > 0;
-      ammIsInitialized.set(id, !needsAccounts);
-      accountsForUpdateForPool.set(id, accountsForUpdate);
-      accountsForUpdate.forEach((a) => {
-        const amms = ammsForAccount.get(a) || [];
-        amms.push(id);
-        ammsForAccount.set(a, amms);
-      });
-    }
-  } catch (e) {
-    logger.error(`Failed to add pool ${poolLabel} ${id}`);
-  }
+  //     const accountsForUpdateWithDuplicates = amm
+  //       .getAccountsForUpdate()
+  //       .map((a) => a.toBase58());
+  //     accountsForUpdate = Array.from(
+  //       new Set(accountsForUpdateWithDuplicates),
+  //     );
+  //     const needsAccounts = accountsForUpdate.length > 0;
+  //     ammIsInitialized.set(id, !needsAccounts);
+  //     accountsForUpdateForPool.set(id, accountsForUpdate);
+  //     accountsForUpdate.forEach((a) => {
+  //       const amms = ammsForAccount.get(a) || [];
+  //       amms.push(id);
+  //       ammsForAccount.set(a, amms);
+  //     });
+  //   }
+  // } catch (e) {
+  //   logger.error(`Failed to add pool ${poolLabel} ${id}`);
+  // }
 
   if (isNaN(feeRateBps)) {
     logger.warn(`Invalid fee rate for pool ${id}: ${feeRateBps}`)
