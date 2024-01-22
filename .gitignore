@@ -28,5 +28,4 @@ build/
 *.trades.csv
 trades.csv
 
-auth.json
-auth.json
+auth*.json

@@ -10,9 +10,7 @@ import {
   USDC_MINT_STRING
 } from './constants.js';
 import { logger } from './logger.js';
-import {
-  calculateJupiterBestQuote as workerCalculateJupiterBestQuote,
-} from './markets/index.js';
+import { calculateJupiterBestQuote } from './markets/amm-calc.js';
 import { SerializableLeg, SerializableLegFixed } from './markets/types.js';
 import { BackrunnableTrade } from './post-simulation-filter.js';
 import { JsbiType, Timings } from './types.js';
@@ -20,7 +18,7 @@ import { prioritize, toDecimalString } from './utils.js';
 
 const JSBI = defaultImport(jsbi);
 
-const MAX_ARB_CALCULATION_TIME_MS = config.get('max_arb_calculation_time_ms');
+// const MAX_ARB_CALCULATION_TIME_MS = config.get('max_arb_calculation_time_ms');
 const HIGH_WATER_MARK = 500;
 
 const MINIMUM_SOL_TRADE_SIZE = JSBI.BigInt(config.get('min_sol_trade_size'));
@@ -183,14 +181,13 @@ in ${timings.postSimEnd - timings.mempoolEnd}ms`);
       continue;
     }
 
-    const bestQuoteResult = await workerCalculateJupiterBestQuote({
+    const bestQuoteResult = await calculateJupiterBestQuote(
       balancingLeg,
       mirroringLeg,
       balancingLegFirst,
-      victimTxnSignature: bs58.encode(txn.signatures[0])
-    }, MAX_ARB_CALCULATION_TIME_MS);
+      bs58.encode(txn.signatures[0]))
 
-    if (bestQuoteResult === null) continue;
+    if (!bestQuoteResult) continue;
 
     const { quote: bestQuote, profit } = bestQuoteResult;
 

@@ -3,7 +3,7 @@ import fs from 'fs';
 import { connection } from '../../clients/rpc.js';
 import { logger } from '../../logger.js';
 import { DEX, Market } from '../types.js';
-import { toPairString, toSerializableAccountInfo } from '../utils.js';
+import { toPairString } from '../utils.js';
 
 // something is wrong with the accounts of these markets
 const MARKETS_TO_IGNORE = ['EXHyQxMSttcvLPwjENnXCPZ8GmLjJYHtNBnAkcFeFKMn'];
@@ -27,12 +27,12 @@ const POOLS_JSON = JSON.parse(
 
 logger.debug(`Raydium CLMM: Found ${POOLS_JSON.data.length} pools`);
 
-const pools = POOLS_JSON.data;
+const poolsJson = POOLS_JSON.data;
 
 const initialAccountBuffers: Map<string, AccountInfo<Buffer>> = new Map();
 const addressesToFetch: PublicKey[] = [];
 
-for (const pool of pools) {
+for (const pool of poolsJson) {
   addressesToFetch.push(new PublicKey(pool.id));
 }
 
@@ -47,12 +47,12 @@ for (let i = 0; i < addressesToFetch.length; i += 100) {
 }
 
 class RaydiumClmmDEX extends DEX {
-  pools: PoolItem[];
+  raydiumPools: PoolItem[];
 
   constructor() {
     super();
-    this.pools = pools.filter((pool) => !MARKETS_TO_IGNORE.includes(pool.id));
-    for (const pool of this.pools) {
+    this.raydiumPools = poolsJson.filter((pool) => !MARKETS_TO_IGNORE.includes(pool.id));
+    for (const pool of this.raydiumPools) {
       const initialAccountInfo = initialAccountBuffers.get(pool.id);
       if (!initialAccountInfo) {
         logger.warn(
@@ -61,15 +61,11 @@ class RaydiumClmmDEX extends DEX {
         continue;
       }
 
-      this.ammCalcAddPoolMessages.push({
-        type: 'addPool',
-        payload: {
-          poolLabel: 'Raydium CLMM',
-          id: pool.id,
-          feeRateBps: Math.floor(pool.ammConfig.tradeFeeRate / 100),
-          serializableAccountInfo:
-            toSerializableAccountInfo(initialAccountInfo),
-        },
+      this.pools.push({
+        poolLabel: 'Raydium CLMM',
+        id: new PublicKey(pool.id),
+        feeRateBps: Math.floor(pool.ammConfig.tradeFeeRate / 100),
+        accountInfo: initialAccountInfo
       });
 
       const market: Market = {

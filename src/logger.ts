@@ -1,5 +1,6 @@
-import { pino } from 'pino';
 import * as dotenv from 'dotenv';
+import { pino } from 'pino';
+import { isMainThread, workerData } from 'worker_threads';
 import { config } from './config.js';
 dotenv.config();
 
@@ -15,4 +16,4 @@ const baseLogger = pino(
   transport,
 );
 
-export const logger = baseLogger.child({ name: config.get('bot_name') });
+export const logger = isMainThread ? baseLogger.child({ name: config.get('bot_name') }) : baseLogger.child({ name: `worker-${workerData.workerId}` })

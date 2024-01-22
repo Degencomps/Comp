@@ -1,5 +1,5 @@
 import { QuoteResponse } from '@jup-ag/api';
-import { AccountInfo } from '@solana/web3.js';
+import { AccountInfo, PublicKey } from '@solana/web3.js';
 import { BASE_MINTS_OF_INTEREST } from '../constants.js';
 import { JsbiType } from '../types.js';
 import { JupiterDexProgramLabel } from './jupiter/index.js';
@@ -18,15 +18,15 @@ export type Market = {
 
 export abstract class DEX {
   pairToMarkets: Map<string, Market[]>;
-  ammCalcAddPoolMessages: AmmCalcWorkerParamMessage[];
+  pools: Pool[];
 
   constructor() {
     this.pairToMarkets = new Map();
-    this.ammCalcAddPoolMessages = [];
+    this.pools = [];
   }
 
-  getAmmCalcAddPoolMessages(): AmmCalcWorkerParamMessage[] {
-    return this.ammCalcAddPoolMessages;
+  getPools(): Pool[] {
+    return this.pools;
   }
 
   getMarketsForPair(mintA: string, mintB: string): Market[] {
@@ -47,6 +47,14 @@ export type SerializableAccountInfoMap = Map<
   string,
   SerializableAccountInfo | null
 >;
+
+export type Pool = {
+  poolLabel: JupiterDexProgramLabel;
+  id: PublicKey;
+  feeRateBps: number;
+  accountInfo: AccountInfo<Buffer>;
+  params?: any;
+}
 
 export type AddPoolParamPayload = {
   poolLabel: JupiterDexProgramLabel;
@@ -94,39 +102,39 @@ export type CalculateJupiterBestQuoteResultPayload = {
 
 export type AmmCalcWorkerParamMessage =
   | {
-  type: 'addPool';
-  payload: AddPoolParamPayload;
-}
+    type: 'addPool';
+    payload: AddPoolParamPayload;
+  }
   | {
-  type: 'calculateQuote';
-  payload: CalculateQuoteParamPayload;
-}
+    type: 'calculateQuote';
+    payload: CalculateQuoteParamPayload;
+  }
   | {
-  type: 'calculateJupiterQuotes',
-  payload: CalculateJupiterQuotesParamPayload;
-}
+    type: 'calculateJupiterQuotes',
+    payload: CalculateJupiterQuotesParamPayload;
+  }
   | {
-  type: 'calculateJupiterBestQuote',
-  payload: CalculateJupiterBestQuoteParamPayload;
-};
+    type: 'calculateJupiterBestQuote',
+    payload: CalculateJupiterBestQuoteParamPayload;
+  };
 
 export type AmmCalcWorkerResultMessage =
   | {
-  type: 'addPool';
-  payload: AddPoolResultPayload;
-}
+    type: 'addPool';
+    payload: AddPoolResultPayload;
+  }
   | {
-  type: 'calculateQuote';
-  payload: CalculateQuoteResultPayload;
-}
+    type: 'calculateQuote';
+    payload: CalculateQuoteResultPayload;
+  }
   | {
-  type: 'calculateJupiterQuotes',
-  payload: CalculateJupiterQuotesResultPayload;
-}
+    type: 'calculateJupiterQuotes',
+    payload: CalculateJupiterQuotesResultPayload;
+  }
   | {
-  type: 'calculateJupiterBestQuote',
-  payload: CalculateJupiterBestQuoteResultPayload;
-};
+    type: 'calculateJupiterBestQuote',
+    payload: CalculateJupiterBestQuoteResultPayload;
+  };
 
 export type SerializableAccountInfo = {
   executable: boolean;

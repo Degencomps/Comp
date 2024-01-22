@@ -1,4 +1,5 @@
 import { SplTokenSwapAmm } from '@jup-ag/core';
+import { PublicKey } from '@solana/web3.js';
 import { logger } from '../../logger.js';
 import {
   JUPITER_MARKETS_CACHE,
@@ -8,7 +9,7 @@ import {
   tryMakeAmm,
 } from '../jupiter/index.js';
 import { DEX, Market } from '../types.js';
-import { toPairString, toSerializableAccountInfo } from '../utils.js';
+import { toPairString } from '../utils.js';
 
 // something is wrong with the accounts of these markets
 const MARKETS_TO_IGNORE = [];
@@ -21,18 +22,18 @@ export const SPL_TOKEN_SWAP_DEXES: JupiterDexProgramLabel[] = [
 ];
 
 class SplTokenSwapDEX extends DEX {
-  pools: JupiterMarketCache[];
+  jupiterPools: JupiterMarketCache[];
 
   constructor() {
     super();
 
-    this.pools = JUPITER_MARKETS_CACHE.filter(
+    this.jupiterPools = JUPITER_MARKETS_CACHE.filter(
       (pool) =>
         SPL_TOKEN_SWAP_DEXES.includes(JupiterDexProgramMap[pool.owner]) &&
         !MARKETS_TO_IGNORE.includes(pool.pubkey),
     );
 
-    for (const pool of this.pools) {
+    for (const pool of this.jupiterPools) {
       const dexLabel = JupiterDexProgramMap[pool.owner];
       const { amm, accountInfo } = tryMakeAmm<SplTokenSwapAmm>(pool) ?? {};
 
@@ -48,15 +49,12 @@ class SplTokenSwapDEX extends DEX {
         continue;
       }
 
-      this.ammCalcAddPoolMessages.push({
-        type: 'addPool',
-        payload: {
-          poolLabel: dexLabel,
-          id: pool.pubkey,
-          feeRateBps: Math.floor(amm['feePct'] * 10000), // eg 0.003 -> 25 bps
-          serializableAccountInfo: toSerializableAccountInfo(accountInfo),
-          params: pool.params,
-        },
+      this.pools.push({
+        poolLabel: dexLabel,
+        id: new PublicKey(pool.pubkey),
+        feeRateBps: Math.floor(amm['feePct'] * 10000), // eg 0.003 -> 25 bps
+        accountInfo,
+        params: pool.params,
       });
 
       const [tokenMintA, tokenMintB] = amm.reserveTokenMints.map((x) =>

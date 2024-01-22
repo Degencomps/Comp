@@ -3,6 +3,7 @@ import {
   MessageAccountKeys,
   VersionedTransaction,
 } from '@solana/web3.js';
+import { SerialisedMempoolUpdate } from './bot-worker.js';
 import { logger } from './logger.js';
 import { lookupTableProvider } from './lookup-table-provider.js';
 import { isTokenAccountOfInterest } from './markets/index.js';
@@ -23,8 +24,12 @@ type FilteredTransaction = {
   timings: Timings;
 };
 
+function isSerialisedMempoolUpdate(value: MempoolUpdate | SerialisedMempoolUpdate): value is SerialisedMempoolUpdate {
+  return 'txn' in value
+}
+
 async function* preSimulationFilter(
-  mempoolUpdates: AsyncGenerator<MempoolUpdate>,
+  mempoolUpdates: AsyncGenerator<MempoolUpdate | SerialisedMempoolUpdate>,
 ): AsyncGenerator<FilteredTransaction> {
   // this makes sure we never have more than HIGH_WATER_MARK transactions pending
   const mempoolUpdatesGreedy = clearOnHighWaterMark(
@@ -33,12 +38,16 @@ async function* preSimulationFilter(
     'mempoolUpdates',
   );
 
-  for await (const { txns, timings } of mempoolUpdatesGreedy) {
+  for await (const update of mempoolUpdatesGreedy) {
+    const timings = update.timings;
+
     const age = Date.now() - timings.mempoolEnd;
     if (age > MAX_MEMPOOL_AGE_MS) {
       logger.debug(`Skipping mempool entry - age: ${age}ms`);
-      continue;
+      return
     }
+
+    const txns = isSerialisedMempoolUpdate(update) ? [VersionedTransaction.deserialize(update.txn)] : update.txns;
 
     for (const txn of txns) {
       const addressLookupTableAccounts: AddressLookupTableAccount[] = [];
