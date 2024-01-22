@@ -14,7 +14,7 @@ const MAX_BOT_WORKING_TIME_MS = config.get('max_bot_working_time_ms');
 
 const botWorkerPool = new WorkerPool(
   NUM_WORKER_THREADS,
-  './build/src/markets/bot-worker.js',
+  './build/src/bot-worker.js',
 );
 await botWorkerPool.initialize();
 logger.info('Initialized bot worker pool');
