@@ -9,12 +9,12 @@ import { logger } from "./logger.js";
 import { initialiseMarkets } from "./markets/index.js";
 
 export type BotWorkerParamMessage = {
-  type: 'transaction';
+  type: 'mempool';
   payload: SerialisedMempoolUpdate
 } | { type: 'initialize' }
 
 export type SerialisedMempoolUpdate = {
-  txn: Uint8Array;
+  txnsSerialised: Uint8Array[];
   timings: Timings;
 };
 
@@ -26,7 +26,7 @@ const [mempoolUpdates, onMempoolUpdate] = createAsyncGeneratorCallback<Serialise
 
 parentPort.on('message', async (message: BotWorkerParamMessage) => {
   switch (message.type) {
-    case 'transaction': {
+    case 'mempool': {
       try {
         onMempoolUpdate(message.payload as SerialisedMempoolUpdate);
       } catch (e) {

@@ -36,11 +36,11 @@ const getProgramUpdates = (searcherClient: searcher.SearcherClient) =>
     throw error;
   })
 
-async function dispatchMempoolUpdate(txn: VersionedTransaction) {
+async function dispatchMempoolUpdate(txns: VersionedTransaction[]) {
   const message: BotWorkerParamMessage = {
-    type: 'transaction',
+    type: 'mempool',
     payload: {
-      txn: txn.serialize(),
+      txnsSerialised: txns.map(t => t.serialize()),
       timings: {
         mempoolEnd: Date.now(),
         preSimEnd: 0,
@@ -70,9 +70,9 @@ async function main() {
 
     for await (const update of updates) {
       // dispatch task to  botworkers TODO: need high watermark filter here?
-      for (const txn of update) {
-        await dispatchMempoolUpdate(txn);
-      }
+
+      await dispatchMempoolUpdate(update);
+
     }
   } catch (e) {
     logger.error({ e }, 'mempool error');

@@ -25,7 +25,7 @@ type FilteredTransaction = {
 };
 
 function isSerialisedMempoolUpdate(value: MempoolUpdate | SerialisedMempoolUpdate): value is SerialisedMempoolUpdate {
-  return 'txn' in value
+  return 'txnsSerialised' in value
 }
 
 async function* preSimulationFilter(
@@ -47,7 +47,7 @@ async function* preSimulationFilter(
       return
     }
 
-    const txns = isSerialisedMempoolUpdate(update) ? [VersionedTransaction.deserialize(update.txn)] : update.txns;
+    const txns = isSerialisedMempoolUpdate(update) ? update.txnsSerialised.map(t => VersionedTransaction.deserialize(t)) : update.txns;
 
     for (const txn of txns) {
       const addressLookupTableAccounts: AddressLookupTableAccount[] = [];
