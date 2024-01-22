@@ -181,4 +181,4 @@ if (RPC_REQUESTS_PER_SECOND > 0) {
   });
 }
 
-export { connection };
+export { connection, coalesceFetch };

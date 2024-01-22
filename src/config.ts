@@ -55,6 +55,11 @@ const config = convict({
     default: 15,
     env: 'MAX_ARB_CALCULATION_TIME_MS',
   },
+  max_bot_working_time_ms: {
+    format: Number,
+    default: 100,
+    env: 'MAX_BOT_WORKING_TIME_MS',
+  },
   payer_keypair_path: {
     format: String,
     default: './payer.json',
