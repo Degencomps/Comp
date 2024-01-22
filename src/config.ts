@@ -85,6 +85,21 @@ const config = convict({
     default: 15000,
     env: 'TXN_FEES_LAMPORTS',
   },
+  min_price_impact_pct: {
+    format: Number,
+    default: 1,
+    env: 'MIN_PRICE_IMPACT_PCT',
+  },
+  min_sol_trade_size: {
+    format: Number,
+    default: 500000000,
+    env: 'MIN_SOL_TRADE_SIZE',
+  },
+  min_usdc_trade_size: {
+    format: Number,
+    default: 50000000,
+    env: 'MIN_USDC_TRADE_SIZE',
+  }
 });
 
 config.validate({ allowed: 'strict' });

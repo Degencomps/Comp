@@ -23,9 +23,9 @@ const JSBI = defaultImport(jsbi);
 const MAX_ARB_CALCULATION_TIME_MS = config.get('max_arb_calculation_time_ms');
 const HIGH_WATER_MARK = 500;
 
-const MINIMUM_SOL_TRADE_SIZE = JSBI.BigInt(500_000_000); // 0.5 sol
-const MINIMUM_USDC_TRADE_SIZE = JSBI.BigInt(50_000_000); // 50 usdc
-const MINIMUM_PRICE_IMPACT_PCT = 2; // 5%
+const MINIMUM_SOL_TRADE_SIZE = JSBI.BigInt(config.get('min_sol_trade_size'));
+const MINIMUM_USDC_TRADE_SIZE = JSBI.BigInt(config.get('min_usdc_trade_size'));
+const MINIMUM_PRICE_IMPACT_PCT = config.get('min_price_impact_pct');
 
 const USDC_SOL_PRICE = 100;
 // ratio in lamports
@@ -167,19 +167,19 @@ in ${timings.postSimEnd - timings.mempoolEnd}ms`);
     // skip if original trade size is too small
     if (sourceIsUsdc) {
       if (JSBI.lessThan(tradeSizeBase, MINIMUM_USDC_TRADE_SIZE)) {
-        logger.debug(`Skipping arb idea bcs trade size is too small`);
+        logger.info(`Skipping arb idea bcs trade size is too small`);
         continue;
       }
     } else {
       if (JSBI.lessThan(tradeSizeBase, MINIMUM_SOL_TRADE_SIZE)) {
-        logger.debug(`Skipping arb idea bcs trade size is too small`);
+        logger.info(`Skipping arb idea bcs trade size is too small`);
         continue;
       }
     }
 
     // skip if price impact is too small
     if (priceImpactPct < MINIMUM_PRICE_IMPACT_PCT) {
-      logger.debug(`Skipping arb idea bcs price impact is too small`);
+      logger.info(`Skipping arb idea bcs price impact is too small`);
       continue;
     }
 
