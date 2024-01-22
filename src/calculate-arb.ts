@@ -23,9 +23,9 @@ const JSBI = defaultImport(jsbi);
 const MAX_ARB_CALCULATION_TIME_MS = config.get('max_arb_calculation_time_ms');
 const HIGH_WATER_MARK = 500;
 
-const MINIMUM_SOL_TRADE_SIZE = JSBI.BigInt(1_500_000_000); // 1 sol
-const MINIMUM_USDC_TRADE_SIZE = JSBI.BigInt(100_000_000); // 100 usdc
-const MINIMUM_PRICE_IMPACT_PCT = 5; // 5%
+const MINIMUM_SOL_TRADE_SIZE = JSBI.BigInt(500_000_000); // 0.5 sol
+const MINIMUM_USDC_TRADE_SIZE = JSBI.BigInt(50_000_000); // 50 usdc
+const MINIMUM_PRICE_IMPACT_PCT = 2; // 5%
 
 const USDC_SOL_PRICE = 100;
 // ratio in lamports
