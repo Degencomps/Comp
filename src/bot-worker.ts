@@ -61,24 +61,24 @@ const bundles = buildBundle(arbIdeas);
 // send the bundle to the cluster
 await sendBundle(bundles);
 
-function createAsyncGeneratorCallback<T>(): [AsyncGenerator<T, any, undefined>, (value: T) => void] {
-  let results: T[] = [];
-  let resolve: ((value: T) => void) | null = null;
-  let promise = new Promise(r => resolve = r);
+function createAsyncGeneratorCallback<T>(): [AsyncGenerator<T, void, undefined>, (value: T) => void] {
+  let resolve: (value: T | PromiseLike<T> | undefined) => void;
+  let promise = new Promise<T>((res) => {
+    resolve = res;
+  });
 
-  const generator = async function* (): AsyncGenerator<T, any, undefined> {
-
+  const generator = async function* () {
     while (true) {
-      await promise;
-      yield* results;
-      results = [];
+      const result = await promise;
+      yield result;
+      promise = new Promise<T>(res => {
+        resolve = res;
+      });
     }
   }();
 
   const callback = (value: T) => {
-    results.push(value);
     resolve(value);
-    promise = new Promise(r => resolve = r);
   };
 
   return [generator, callback];

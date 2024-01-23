@@ -2,12 +2,12 @@ import { PublicKey, VersionedTransaction } from '@solana/web3.js';
 import { searcher } from 'jito-ts';
 import { BotWorkerParamMessage } from './bot-worker.js';
 import { searcherClientManager } from './clients/jito.js';
-import { config } from "./config.js";
+import { config } from './config.js';
 import { logger } from './logger.js';
 import { JupiterDexProgramLabelMap } from './markets/jupiter/index.js';
 import { SPL_TOKEN_SWAP_DEXES } from './markets/spl-token-swap/index.js';
 import { fuseGenerators } from './utils.js';
-import { WorkerPool } from "./worker-pool.js";
+import { WorkerPool } from './worker-pool.js';
 
 const NUM_WORKER_THREADS = config.get('num_worker_threads');
 const MAX_BOT_WORKING_TIME_MS = config.get('max_bot_working_time_ms');
@@ -34,7 +34,7 @@ const getProgramUpdates = (searcherClient: searcher.SearcherClient) =>
   searcherClient.programUpdates(PROGRAMS_OF_INTEREST, [], (error) => {
     logger.error({ error }, 'programUpdates error');
     throw error;
-  })
+  });
 
 async function dispatchMempoolUpdate(txns: VersionedTransaction[]) {
   const message: BotWorkerParamMessage = {
@@ -49,7 +49,7 @@ async function dispatchMempoolUpdate(txns: VersionedTransaction[]) {
         calcArbEnd: 0,
         buildBundleEnd: 0,
         bundleSent: 0,
-      }
+      },
     },
   };
 
@@ -58,22 +58,13 @@ async function dispatchMempoolUpdate(txns: VersionedTransaction[]) {
   >(message, MAX_BOT_WORKING_TIME_MS);
 }
 
-async function main() {
-  const generators: AsyncGenerator<VersionedTransaction[]>[] = [];
+const generators: AsyncGenerator<VersionedTransaction[]>[] = [];
+// subscribe to the default client
+generators.push(getProgramUpdates(searcherClientManager.getDefaultClient()));
 
-  try {
-    // subscribe to the default client
-    generators.push(getProgramUpdates(searcherClientManager.getDefaultClient()));
+// subscribing to multiple mempools is in particular useful in europe (frankfurt and amsterdam)
+const updates = fuseGenerators(generators);
 
-    // subscribing to multiple mempools is in particular useful in europe (frankfurt and amsterdam)
-    const updates = fuseGenerators(generators);
-
-    for await (const update of updates) {
-      await dispatchMempoolUpdate(update);
-    }
-  } catch (e) {
-    logger.error({ e }, 'mempool error');
-  }
+for await (const update of updates) {
+  await dispatchMempoolUpdate(update);
 }
-
-await main();

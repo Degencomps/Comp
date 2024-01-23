@@ -11,9 +11,9 @@ import { getMarketForVault } from './markets/index.js';
 import { Market } from './markets/types.js';
 import { SimulationResult } from './simulation.js';
 import { Timings } from './types.js';
-import { dropBeyondHighWaterMark } from './utils.js';
+// import { dropBeyondHighWaterMark } from './utils.js';
 
-const HIGH_WATER_MARK = 100;
+// const HIGH_WATER_MARK = 100;
 const MIN_PRICE_IMPACT_PCT_FILTER = 0.1;
 
 enum TradeDirection {
@@ -56,18 +56,18 @@ setInterval(() => {
 async function* postSimulateFilter(
   simulationsIterator: AsyncGenerator<SimulationResult>,
 ): AsyncGenerator<BackrunnableTrade> {
-  const simulationsIteratorGreedy = dropBeyondHighWaterMark(
-    simulationsIterator,
-    HIGH_WATER_MARK,
-    'simulationsIterator',
-  );
+  // const simulationsIteratorGreedy = dropBeyondHighWaterMark(
+  //   simulationsIterator,
+  //   HIGH_WATER_MARK,
+  //   'simulationsIterator',
+  // );
 
   for await (const {
     txn,
     response,
     accountsOfInterest,
     timings,
-  } of simulationsIteratorGreedy) {
+  } of simulationsIterator) {
     logger.trace({ response }, "response")
 
     if (response.value.transactionResults.length === 0) {

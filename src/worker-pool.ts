@@ -8,7 +8,7 @@ type ResolveFunc = (value: any) => void;
 type RejectFunc = (reason: any) => void;
 
 class TaskContainer {
-  isCanelled = false;
+  isCancelled = false;
 
   constructor(
     public param: any,
@@ -109,14 +109,8 @@ class WorkerPool extends EventEmitter {
   }
 
   private getNextWorker(): PoolWorker {
-    let worker: PoolWorker;
-    while (!worker) {
-      const nextWorker = this.workers[this.nextWorkerIndex];
-      this.nextWorkerIndex = (this.nextWorkerIndex + 1) % this.size;
-      if (nextWorker.ready) {
-        worker = nextWorker;
-      }
-    }
+    const worker = this.workers[this.nextWorkerIndex];
+    this.nextWorkerIndex = (this.nextWorkerIndex + 1) % this.size;
     return worker;
   }
 
@@ -124,7 +118,7 @@ class WorkerPool extends EventEmitter {
     while (!this.highPriorityTaskQueue.isEmpty() || !this.taskQueue.isEmpty()) {
       const task =
         this.highPriorityTaskQueue.dequeue() || this.taskQueue.dequeue();
-      if (!task.isCanelled) {
+      if (!task.isCancelled) {
         return task;
       }
     }
@@ -187,7 +181,7 @@ class WorkerPool extends EventEmitter {
 
       if (timeout !== undefined) {
         setTimeout(() => {
-          task.isCanelled = true;
+          task.isCancelled = true;
           resolve(null); // resolve the promise with null if it times out
         }, Math.max(timeout, 0));
       }
