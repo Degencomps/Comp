@@ -180,8 +180,6 @@ async function* buildBundle(
       }
     )
 
-    logger.debug({ allRoutesQuoteResponse }, "all routes quote")
-
     let backrunningTx: VersionedTransaction
     try {
       backrunningTx = await compileJupiterTransaction(

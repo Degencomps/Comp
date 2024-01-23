@@ -9,13 +9,13 @@ import { lookupTableProvider } from './lookup-table-provider.js';
 import { isTokenAccountOfInterest } from './markets/index.js';
 import { MempoolUpdate } from './mempool.js';
 import { Timings } from './types.js';
-import { clearOnHighWaterMark } from './utils.js';
+// import { clearOnHighWaterMark } from './utils.js';
 
 const SKIP_TX_IF_CONTAINS_ADDRESS = [
   '882DFRCi5akKFyYxT4PP2vZkoQEGvm2Nsind2nPDuGqu', // orca whirlpool mm whose rebalancing txns mess with the calc down the line and is no point in backrunning
 ];
 
-const HIGH_WATER_MARK = 2500;
+// const HIGH_WATER_MARK = 2500;
 const MAX_MEMPOOL_AGE_MS = 100;
 
 type FilteredTransaction = {
@@ -33,13 +33,13 @@ async function* preSimulationFilter(
 ): AsyncGenerator<FilteredTransaction> {
   // this makes sure we never have more than HIGH_WATER_MARK transactions pending
   // todo: when water mark is too low, it keeps clearing the queue and we never get to process anything
-  const mempoolUpdatesGreedy = clearOnHighWaterMark(
-    mempoolUpdates,
-    HIGH_WATER_MARK,
-    'mempoolUpdates',
-  );
+  // const mempoolUpdatesGreedy = clearOnHighWaterMark(
+  //   mempoolUpdates,
+  //   HIGH_WATER_MARK,
+  //   'mempoolUpdates',
+  // );
 
-  for await (const update of mempoolUpdatesGreedy) {
+  for await (const update of mempoolUpdates) {
     const timings = update.timings;
 
     const age = Date.now() - timings.mempoolEnd;

@@ -66,7 +66,7 @@ class WorkerPool extends EventEmitter {
   private taskQueue: Queue<TaskContainer> = new Queue();
   private highPriorityTaskQueue: Queue<TaskContainer> = new Queue();
   private perWorkerTaskQueue: Queue<TaskContainer>[] = [];
-  private currentWorkerIndex = 0;
+  private nextWorkerIndex = 0;
 
   constructor(size: number, workerPath: string) {
     super();
@@ -108,15 +108,16 @@ class WorkerPool extends EventEmitter {
     });
   }
 
-  private getNextWorker(): PoolWorker | null {
-    for (let i = 0; i < this.size; i++) {
-      const index = (this.currentWorkerIndex + i) % this.size;
-      if (this.workers[index].ready) {
-        this.currentWorkerIndex = (index + 1) % this.size; // Update the index
-        return this.workers[index];
+  private getNextWorker(): PoolWorker {
+    let worker: PoolWorker;
+    while (!worker) {
+      const nextWorker = this.workers[this.nextWorkerIndex];
+      this.nextWorkerIndex = (this.nextWorkerIndex + 1) % this.size;
+      if (nextWorker.ready) {
+        worker = nextWorker;
       }
     }
-    return null; // Return null if no idle workers are found
+    return worker;
   }
 
   private getNextTaskFromSharedQueue(): TaskContainer | undefined {

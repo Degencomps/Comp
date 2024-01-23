@@ -165,19 +165,19 @@ in ${timings.postSimEnd - timings.mempoolEnd}ms`);
     // skip if original trade size is too small
     if (sourceIsUsdc) {
       if (JSBI.lessThan(tradeSizeBase, MINIMUM_USDC_TRADE_SIZE)) {
-        logger.info(`Skipping arb idea bcs trade size is too small`);
+        logger.debug(`Skipping arb idea bcs trade size is too small`);
         continue;
       }
     } else {
       if (JSBI.lessThan(tradeSizeBase, MINIMUM_SOL_TRADE_SIZE)) {
-        logger.info(`Skipping arb idea bcs trade size is too small`);
+        logger.debug(`Skipping arb idea bcs trade size is too small`);
         continue;
       }
     }
 
     // skip if price impact is too small
     if (priceImpactPct < MINIMUM_PRICE_IMPACT_PCT) {
-      logger.info(`Skipping arb idea bcs price impact is too small`);
+      logger.debug(`Skipping arb idea bcs price impact is too small`);
       continue;
     }
 
