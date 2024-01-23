@@ -107,6 +107,7 @@ async function* clearOnHighWaterMark<T>(
 
   async function consume() {
     for await (const item of iterable) {
+      logger.debug('queue length: ' + queue.length());
       if (queue.length() >= highWaterMark) {
         logger.warn(
           `HighWaterMark of ${highWaterMark} reached. Clearing ${name}`,

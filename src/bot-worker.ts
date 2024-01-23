@@ -7,6 +7,7 @@ import { simulate } from "./simulation.js";
 import { Timings } from "./types.js";
 import { logger } from "./logger.js";
 import { initialiseMarkets } from "./markets/index.js";
+import { sendBundle } from "./send-bundle.js";
 
 export type BotWorkerParamMessage = {
   type: 'mempool';
@@ -57,9 +58,8 @@ const arbIdeas = calculateArb(backrunnableTrades);
 // build the bundle to submit
 const bundles = buildBundle(arbIdeas);
 
-for await (const bundle of bundles) {
-  logger.debug(`bundle: ${bundle}`);
-}
+// send the bundle to the cluster
+await sendBundle(bundles);
 
 function createAsyncGeneratorCallback<T>(): [AsyncGenerator<T, any, undefined>, (value: T) => void] {
   let results: T[] = [];

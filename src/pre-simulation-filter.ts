@@ -15,7 +15,7 @@ const SKIP_TX_IF_CONTAINS_ADDRESS = [
   '882DFRCi5akKFyYxT4PP2vZkoQEGvm2Nsind2nPDuGqu', // orca whirlpool mm whose rebalancing txns mess with the calc down the line and is no point in backrunning
 ];
 
-const HIGH_WATER_MARK = 250;
+const HIGH_WATER_MARK = 2500;
 const MAX_MEMPOOL_AGE_MS = 100;
 
 type FilteredTransaction = {
