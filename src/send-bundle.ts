@@ -98,44 +98,44 @@ async function processCompletedTrade(uuid: string) {
 }
 
 async function sendBundle(bundleIterator: AsyncGenerator<Arb>): Promise<void> {
-  const searcherClients = searcherClientManager.getAllClients();
-  for (const [index, client] of searcherClients.entries()) {
-    client.onBundleResult(
-      (bundleResult) => {
-        const bundleId = bundleResult.bundleId;
-        const isAccepted = bundleResult.accepted;
-        const isRejected = bundleResult.rejected;
-        if (isAccepted) {
-          logger.info(
-            `Client${index.toString()} Bundle ${bundleId} accepted in slot ${bundleResult.accepted!.slot}`,
-          );
-          if (bundlesInTransit.has(bundleId)) {
-            bundlesInTransit.get(bundleId)!.accepted += 1;
-          }
-        }
-        if (isRejected) {
-          logger.info({ result: bundleResult.rejected }, `Client${index.toString()} Bundle ${bundleId} rejected:`);
-          // logger.info(`Bundle ${bundleId} rejected`);
-          if (bundlesInTransit.has(bundleId)) {
-            const trade: Trade = bundlesInTransit.get(bundleId)!;
-            trade.rejected = true;
-            const rejectedEntry = Object.entries(bundleResult.rejected!).find(
-              // eslint-disable-next-line @typescript-eslint/no-unused-vars
-              ([_, value]) => value !== undefined,
-            );
-            const [errorType, errorContent] = rejectedEntry!;
-            trade.errorType = errorType;
-            trade.errorContent = JSON.stringify(errorContent);
-          }
-        }
-      },
-      (error) => {
-        logger.error({ error }, `Client${index.toString()} onBundleResult error`);
-        // throw error;
-      },
-    );
-  }
-
+  // todo: this throws uncaught rate limit error which crashes the app
+  // const searcherClients = searcherClientManager.getAllClients();
+  // for (const [index, client] of searcherClients.entries()) {
+  //   client.onBundleResult(
+  //     (bundleResult) => {
+  //       const bundleId = bundleResult.bundleId;
+  //       const isAccepted = bundleResult.accepted;
+  //       const isRejected = bundleResult.rejected;
+  //       if (isAccepted) {
+  //         logger.info(
+  //           `Client${index.toString()} Bundle ${bundleId} accepted in slot ${bundleResult.accepted!.slot}`,
+  //         );
+  //         if (bundlesInTransit.has(bundleId)) {
+  //           bundlesInTransit.get(bundleId)!.accepted += 1;
+  //         }
+  //       }
+  //       if (isRejected) {
+  //         logger.info({ result: bundleResult.rejected }, `Client${index.toString()} Bundle ${bundleId} rejected:`);
+  //         // logger.info(`Bundle ${bundleId} rejected`);
+  //         if (bundlesInTransit.has(bundleId)) {
+  //           const trade: Trade = bundlesInTransit.get(bundleId)!;
+  //           trade.rejected = true;
+  //           const rejectedEntry = Object.entries(bundleResult.rejected!).find(
+  //             // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  //             ([_, value]) => value !== undefined,
+  //           );
+  //           const [errorType, errorContent] = rejectedEntry!;
+  //           trade.errorType = errorType;
+  //           trade.errorContent = JSON.stringify(errorContent);
+  //         }
+  //       }
+  //     },
+  //     (error) => {
+  //       logger.error({ error }, `Client${index.toString()} onBundleResult error`);
+  //       // throw error;
+  //     },
+  //   );
+  // }
 
   for await (const {
     bundle,

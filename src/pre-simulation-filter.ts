@@ -32,6 +32,7 @@ async function* preSimulationFilter(
   mempoolUpdates: AsyncGenerator<MempoolUpdate | SerialisedMempoolUpdate>,
 ): AsyncGenerator<FilteredTransaction> {
   // this makes sure we never have more than HIGH_WATER_MARK transactions pending
+  // todo: when water mark is too low, it keeps clearing the queue and we never get to process anything
   const mempoolUpdatesGreedy = clearOnHighWaterMark(
     mempoolUpdates,
     HIGH_WATER_MARK,
