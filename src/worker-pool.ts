@@ -175,7 +175,7 @@ class WorkerPool extends EventEmitter {
 
       const worker = this.getNextWorker();
 
-      if (worker) {
+      if (worker.ready) {
         this.processTask(worker);
       }
 

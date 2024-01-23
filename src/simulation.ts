@@ -8,8 +8,8 @@ import { FilteredTransaction } from './pre-simulation-filter.js';
 import { Timings } from './types.js';
 
 // drop slow sims - usually a sign of high load
-const MAX_SIMULATION_AGE_MS = 200; // TODO: change this back to 200
-const MAX_PENDING_SIMULATIONS = 1000;
+const MAX_SIMULATION_AGE_MS = 200;
+const MAX_PENDING_SIMULATIONS = 100;
 const RECEIVED_SIMULATION_RESULT_EVENT = 'receivedSimulationResult';
 
 type SimulationResult = {
@@ -77,7 +77,6 @@ async function sendSimulations(
           accountsOfInterest,
           timings,
         });
-
       }).finally(() => {
       pendingSimulations -= 1;
       eventEmitter.emit(RECEIVED_SIMULATION_RESULT_EVENT);
@@ -108,22 +107,25 @@ async function* simulate(
       continue;
     }
 
-    if (response !== null) {
-      yield {
-        txn,
-        response,
-        accountsOfInterest,
-        timings: {
-          mempoolEnd: timings.mempoolEnd,
-          preSimEnd: timings.preSimEnd,
-          simEnd: Date.now(),
-          postSimEnd: 0,
-          calcArbEnd: 0,
-          buildBundleEnd: 0,
-          bundleSent: 0,
-        },
-      };
+    if (!response) {
+      logger.debug(`dropping failed simulation`);
+      continue;
     }
+
+    yield {
+      txn,
+      response,
+      accountsOfInterest,
+      timings: {
+        mempoolEnd: timings.mempoolEnd,
+        preSimEnd: timings.preSimEnd,
+        simEnd: Date.now(),
+        postSimEnd: 0,
+        calcArbEnd: 0,
+        buildBundleEnd: 0,
+        bundleSent: 0,
+      },
+    };
   }
 }
 

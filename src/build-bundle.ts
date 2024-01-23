@@ -103,7 +103,7 @@ async function getAddressLookupTableAccounts(
   // Fetch new keys only
   const addressLookupTableAccountInfos = await connection.getMultipleAccountsInfo(
     newKeys.map(key => new PublicKey(key))
-  );
+  )
 
   const newResults = addressLookupTableAccountInfos.reduce((acc, accountInfo, index) => {
     const addressLookupTableAddress = newKeys[index];
