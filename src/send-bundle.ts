@@ -7,7 +7,6 @@ import { searcherClientManager } from './clients/jito.js';
 import { connection } from './clients/rpc.js';
 import { logger } from './logger.js';
 import { MAX_TRADE_AGE_MS } from "./calculate-arb.js";
-import { searcher } from "jito-ts";
 
 const CHECK_LANDED_DELAY_MS = 30000;
 
@@ -98,27 +97,23 @@ async function processCompletedTrade(uuid: string) {
   return;
 }
 
-async function handleClientBundleResults(client: searcher.SearcherClient, index: number) {
-  try {
-    for await (const bundleResult of client.bundleResults((error) => {
-      logger.error({ error }, `Client${index.toString()} onBundleResult error`);
-    })) {
+async function sendBundle(bundleIterator: AsyncGenerator<Arb>): Promise<void> {
+  const searcherClients = searcherClientManager.getDefaultClient();
+  searcherClients.onBundleResult(
+    (bundleResult) => {
       const bundleId = bundleResult.bundleId;
-      if (!bundlesInTransit.has(bundleId)) {
-        continue
-      }
       const isAccepted = bundleResult.accepted;
       const isRejected = bundleResult.rejected;
       if (isAccepted) {
         logger.info(
-          `Client${index.toString()} Bundle ${bundleId} accepted in slot ${bundleResult.accepted!.slot}`,
+          `Bundle ${bundleId} accepted in slot ${bundleResult.accepted!.slot}`,
         );
         if (bundlesInTransit.has(bundleId)) {
           bundlesInTransit.get(bundleId)!.accepted += 1;
         }
       }
       if (isRejected) {
-        logger.info({ result: bundleResult.rejected }, `Client${index.toString()} Bundle ${bundleId} rejected:`);
+        logger.info({ result: bundleResult.rejected }, `Client Bundle ${bundleId} rejected:`);
         // logger.info(`Bundle ${bundleId} rejected`);
         if (bundlesInTransit.has(bundleId)) {
           const trade: Trade = bundlesInTransit.get(bundleId)!;
@@ -132,27 +127,12 @@ async function handleClientBundleResults(client: searcher.SearcherClient, index:
           trade.errorContent = JSON.stringify(errorContent);
         }
       }
-    }
-  } catch (e) {
-    // This will catch any errors that might be thrown during iteration
-    logger.error('Error in handleClientBundleResults:', e);
-  }
-}
-
-async function processBundleResults() {
-  const clients = searcherClientManager.getAllClients();
-  const clientHandlers = clients.map((client, index) => handleClientBundleResults(client, index));
-
-  try {
-    await Promise.all(clientHandlers);
-  } catch (e) {
-    logger.error('Error in processBundleResults:', e);
-  }
-}
-
-processBundleResults();
-
-async function sendBundle(bundleIterator: AsyncGenerator<Arb>): Promise<void> {
+    },
+    (error) => {
+      logger.error({ error }, `onBundleResult error`);
+      // throw error;
+    },
+  );
 
   for await (const {
     bundle,
