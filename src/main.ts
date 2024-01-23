@@ -69,10 +69,7 @@ async function main() {
     const updates = fuseGenerators(generators);
 
     for await (const update of updates) {
-      // dispatch task to  botworkers TODO: need high watermark filter here?
-
       await dispatchMempoolUpdate(update);
-
     }
   } catch (e) {
     logger.error({ e }, 'mempool error');

@@ -9,11 +9,13 @@ type RejectFunc = (reason: any) => void;
 
 class TaskContainer {
   isCanelled = false;
+
   constructor(
     public param: any,
     public resolve: ResolveFunc,
     public reject: RejectFunc,
-  ) {}
+  ) {
+  }
 }
 
 class PoolWorker extends Worker {
@@ -64,6 +66,7 @@ class WorkerPool extends EventEmitter {
   private taskQueue: Queue<TaskContainer> = new Queue();
   private highPriorityTaskQueue: Queue<TaskContainer> = new Queue();
   private perWorkerTaskQueue: Queue<TaskContainer>[] = [];
+  private currentWorkerIndex = 0;
 
   constructor(size: number, workerPath: string) {
     super();
@@ -101,13 +104,19 @@ class WorkerPool extends EventEmitter {
       });
     }
     // eslint-disable-next-line @typescript-eslint/no-empty-function
-    return Promise.all(isOnline).then(() => {});
+    return Promise.all(isOnline).then(() => {
+    });
   }
 
-  private getIdleWorker(): PoolWorker | null {
-    const worker = this.workers.find((worker) => worker.ready);
-
-    return worker ?? null;
+  private getNextWorker(): PoolWorker | null {
+    for (let i = 0; i < this.size; i++) {
+      const index = (this.currentWorkerIndex + i) % this.size;
+      if (this.workers[index].ready) {
+        this.currentWorkerIndex = (index + 1) % this.size; // Update the index
+        return this.workers[index];
+      }
+    }
+    return null; // Return null if no idle workers are found
   }
 
   private getNextTaskFromSharedQueue(): TaskContainer | undefined {
@@ -148,7 +157,7 @@ class WorkerPool extends EventEmitter {
         worker.id
       } is processing task. shared queue size: ${this.taskQueue.size()}, per worker queue size: ${this.perWorkerTaskQueue[
         worker.id
-      ].size()}`,
+        ].size()}`,
     );
     const { param, resolve, reject } = task;
 
@@ -169,7 +178,7 @@ class WorkerPool extends EventEmitter {
         this.taskQueue.enqueue(task);
       }
 
-      const worker = this.getIdleWorker();
+      const worker = this.getNextWorker();
 
       if (worker) {
         this.processTask(worker);
