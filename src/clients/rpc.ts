@@ -164,21 +164,11 @@ const coalesceFetch = () => {
   };
 };
 
-let connection: Connection;
-
-if (RPC_REQUESTS_PER_SECOND > 0) {
-  connection = new Connection(RPC_URL, {
-    disableRetryOnRateLimit: true,
-    httpAgent: keepaliveAgent,
-    commitment: 'processed',
-    fetch: coalesceFetch() as any,
-  });
-} else {
-  connection = new Connection(RPC_URL, {
-    httpAgent: keepaliveAgent,
-    disableRetryOnRateLimit: true,
-    commitment: 'processed',
-  });
-}
+const connection = new Connection(RPC_URL, {
+  disableRetryOnRateLimit: true,
+  httpAgent: keepaliveAgent,
+  commitment: 'processed',
+  ...(RPC_REQUESTS_PER_SECOND > 0 ? { fetch: coalesceFetch() as any } : {})
+});
 
 export { connection, coalesceFetch };
