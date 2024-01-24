@@ -30,3 +30,5 @@ trades.csv
 
 auth*.json
 payer.json
+
+*.csv

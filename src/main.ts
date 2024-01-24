@@ -104,7 +104,9 @@ async function dispatchMempoolUpdatesIndividually(txns: VersionedTransaction[]) 
 
 const generators: AsyncGenerator<VersionedTransaction[]>[] = [];
 // subscribe to the default client
-generators.push(getProgramUpdates(searcherClientManager.getDefaultClient()));
+for (const client of searcherClients) {
+  generators.push(getProgramUpdates(client));
+}
 
 // subscribing to multiple mempools is in particular useful in europe (frankfurt and amsterdam)
 const updates = fuseGenerators(generators);
