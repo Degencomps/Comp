@@ -58,6 +58,10 @@ async function dispatchMempoolUpdate(txns: VersionedTransaction[]) {
   >(message, MAX_BOT_WORKING_TIME_MS);
 }
 
+async function dispatchMempoolUpdatesIndividually(txns: VersionedTransaction[]) {
+  await Promise.all(txns.map(t => dispatchMempoolUpdate([t])));
+}
+
 const generators: AsyncGenerator<VersionedTransaction[]>[] = [];
 // subscribe to the default client
 generators.push(getProgramUpdates(searcherClientManager.getDefaultClient()));
@@ -66,5 +70,5 @@ generators.push(getProgramUpdates(searcherClientManager.getDefaultClient()));
 const updates = fuseGenerators(generators);
 
 for await (const update of updates) {
-  await dispatchMempoolUpdate(update);
+  await dispatchMempoolUpdatesIndividually(update);
 }

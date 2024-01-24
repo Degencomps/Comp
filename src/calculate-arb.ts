@@ -31,7 +31,7 @@ const USDC_SOL_PRICE = 100;
 // then divice by SOL/USDC price to get USDC -> SOL ratio
 export const LAMPORTS_PER_USDC_UNIT = Math.floor(1000 / USDC_SOL_PRICE)
 const USDC_SOL_RATIO = BigInt(LAMPORTS_PER_USDC_UNIT);
-export const MAX_TRADE_AGE_MS = 200;
+export const MAX_TRADE_AGE_MS = 300;
 
 export type ArbIdeaTrade = {
   in: JsbiType,
@@ -45,7 +45,8 @@ export type ArbIdeaTrade = {
 type ArbIdea = {
   txn: VersionedTransaction;
   expectedProfit: JsbiType;
-  trade: ArbIdeaTrade
+  expectedProfitSol: JsbiType;
+  trade: ArbIdeaTrade;
   timings: Timings;
 };
 
@@ -192,6 +193,7 @@ in ${timings.postSimEnd - timings.mempoolEnd}ms`);
     const { quote: bestQuote, profit } = bestQuoteResult;
 
     const profitBN = JSBI.BigInt(profit)
+    const profitInSolLamports = sourceIsUsdc ? JSBI.multiply(profitBN, JSBI.BigInt(USDC_SOL_RATIO.toString())) : profitBN
 
     const decimals = sourceIsUsdc ? USDC_DECIMALS : SOL_DECIMALS;
     const backrunSourceMintName = sourceIsUsdc ? 'USDC' : 'SOL';
@@ -213,6 +215,7 @@ in ${timings.postSimEnd - timings.mempoolEnd}ms`);
     yield {
       txn,
       expectedProfit: profitBN,
+      expectedProfitSol: profitInSolLamports,
       trade: {
         in: bestQuote.in,
         out: bestQuote.out,

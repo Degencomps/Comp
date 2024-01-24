@@ -20,6 +20,8 @@ const BPS_MULTIPLIER = JSBI.BigInt(10000);
 const MAX_USDC_BALANCE = 1200 * 10 ** 6
 const MAX_SOL_BALANCE = 12 * 10 ** 9
 
+//const INCLUDED_DEXES: JupiterDexProgramLabel[] = ['Lifinity V2', 'Whirlpool', 'Raydium', 'Raydium CLMM', 'Meteora DLMM', 'Mercurial']
+
 // const pools: Map<string, Amm> = new Map();
 // const accountsForUpdateForPool: Map<string, string[]> = new Map();
 // const ammsForAccount: Map<string, string[]> = new Map();
@@ -82,8 +84,9 @@ async function fetchJupiterQuote(sourceMint: string, destinationMint: string, am
       amount: Math.floor(parseFloat(amountIn)),
       slippageBps: 0,
       onlyDirectRoutes: true,
-      asLegacyTransaction: true,
-      excludeDexes: ["Perps", ..._excludeDexes]
+      asLegacyTransaction: false,
+      //dexes: INCLUDED_DEXES
+      //excludeDexes: ["Perps"]
     })
 
     return {

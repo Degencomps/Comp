@@ -31,6 +31,7 @@ import { IDL as JitoBomb } from "./clients/types/jito_bomb.js";
 import { BASE_MINTS_OF_INTEREST_B58 } from "./constants.js";
 import { Buffer } from "buffer";
 import { SerializableLegFixed } from "./markets/types.js";
+import { prioritize } from "./utils.js";
 
 const TIP_ACCOUNTS = [
   '96gYZGLnJYVFmbjzopPSU6QiEV5fGqZNyN9nmNhvrZU5',
@@ -50,6 +51,9 @@ const MIN_TIP_LAMPORTS = config.get('min_tip_lamports');
 const MAX_TIP_BPS = config.get('max_tip_bps');
 const LEDGER_PROGRAM_ID = config.get('ledger_program')
 const TXN_FEES_LAMPORTS = config.get('txn_fees_lamports'); // transaction fees in lamports TODO: need to consider new token account rents?
+// approx 10c min
+const MIN_PROFIT_LAMPORTS = JSBI.BigInt(Math.floor(0.001 * 1000000000));
+const HIGH_WATER_MARK = 250;
 
 // const MIN_BALANCE_RENT_EXEMPT_TOKEN_ACC =
 //   await getMinimumBalanceForRentExemptAccount(connection);
@@ -89,38 +93,41 @@ async function getAddressLookupTableAccounts(
   keys: string[]
 ): Promise<AddressLookupTableAccount[]> {
   const newKeys: string[] = [];
-  const cachedResults: AddressLookupTableAccount[] = [];
+  const results: AddressLookupTableAccount[] = [];
 
   // Separate new keys and cached keys
   keys.forEach(key => {
     if (addressLookupTableAccountCache.has(key)) {
-      cachedResults.push(addressLookupTableAccountCache.get(key));
+      results.push(addressLookupTableAccountCache.get(key));
     } else {
       newKeys.push(key);
     }
   });
 
   // Fetch new keys only
-  const addressLookupTableAccountInfos = await connection.getMultipleAccountsInfo(
-    newKeys.map(key => new PublicKey(key))
-  )
+  if (newKeys.length > 0) {
+    const addressLookupTableAccountInfos = await connection.getMultipleAccountsInfo(
+      newKeys.map(key => new PublicKey(key))
+    )
 
-  const newResults = addressLookupTableAccountInfos.reduce((acc, accountInfo, index) => {
-    const addressLookupTableAddress = newKeys[index];
-    if (accountInfo) {
-      const addressLookupTableAccount = new AddressLookupTableAccount({
-        key: new PublicKey(addressLookupTableAddress),
-        state: AddressLookupTableAccount.deserialize(accountInfo.data),
-      });
-      acc.push(addressLookupTableAccount);
-      addressLookupTableAccountCache.set(addressLookupTableAddress, addressLookupTableAccount);
-    }
+    const newResults = addressLookupTableAccountInfos.reduce((acc, accountInfo, index) => {
+      const addressLookupTableAddress = newKeys[index];
+      if (accountInfo) {
+        const addressLookupTableAccount = new AddressLookupTableAccount({
+          key: new PublicKey(addressLookupTableAddress),
+          state: AddressLookupTableAccount.deserialize(accountInfo.data),
+        });
+        acc.push(addressLookupTableAccount);
+        addressLookupTableAccountCache.set(addressLookupTableAddress, addressLookupTableAccount);
+      }
 
-    return acc;
-  }, [] as AddressLookupTableAccount[]);
+      return acc;
+    }, [] as AddressLookupTableAccount[]);
 
-  // Combine cached results and new results
-  return [...cachedResults, ...newResults];
+    // Combine cached results and new results
+    results.push(...newResults)
+  }
+  return results;
 }
 
 export type Arb = {
@@ -166,9 +173,29 @@ const syncNativeIx = createSyncNativeInstruction(
 async function* buildBundle(
   arbIdeaIterator: AsyncGenerator<ArbIdea>,
 ): AsyncGenerator<Arb> {
-  for await (const arbIdea of arbIdeaIterator) {
-    const { txn, expectedProfit, timings, trade, } = arbIdea;
+  const arbIdeasGreedyPrioritized = prioritize(
+    arbIdeaIterator,
+    (ideaA, ideaB) => {
+      if (JSBI.lessThan(ideaA.expectedProfitSol, ideaB.expectedProfitSol)) {
+        return 1;
+      }
+
+      if (JSBI.greaterThan(ideaA.expectedProfitSol, ideaB.expectedProfitSol)) {
+        return -1;
+      }
+      // a must be equal to b
+      return 0;
+    },
+    HIGH_WATER_MARK,
+  );
+
+  for await (const arbIdea of arbIdeasGreedyPrioritized) {
+    const { txn, expectedProfit, expectedProfitSol, timings, trade, } = arbIdea;
     const { in: inAmount, out: outAmount, mirroringLegQuote, balancingLeg, balancingLegFirst, tipBps } = trade;
+
+    if (JSBI.lessThan(expectedProfitSol, MIN_PROFIT_LAMPORTS)) {
+      continue;
+    }
 
     const allRoutesQuoteResponse = createAllRoutesQuoteResponse(
       {
@@ -311,7 +338,9 @@ async function compileJupiterTransaction(
         userPublicKey: wallet.publicKey.toBase58(),
         quoteResponse: quoteResponse,
         useSharedAccounts: false,
-        wrapAndUnwrapSol: false
+        wrapAndUnwrapSol: false,
+        skipUserAccountsRpcCalls: false,
+        dynamicComputeUnitLimit: false
       }
     })
 

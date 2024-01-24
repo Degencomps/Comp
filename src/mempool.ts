@@ -24,8 +24,7 @@ type MempoolUpdate = {
 
 const getProgramUpdates = (searcherClient: searcher.SearcherClient) =>
   searcherClient.programUpdates(PROGRAMS_OF_INTEREST, [], (error) => {
-    logger.error({ error }, 'programUpdates error');
-    // throw error;
+    logger.error(error, 'programUpdates error'); throw error;
   })
 
 async function* mempool(): AsyncGenerator<MempoolUpdate> {

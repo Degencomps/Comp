@@ -67,7 +67,7 @@ async function processCompletedTrade(uuid: string) {
     });
 
   if (txn1 !== null) {
-    logger.info(`Money money: Backrunning ${txn0Signature} with Tx ${txn1Signature} landed`);
+    logger.info(`**** Money money: Backrunning ${txn0Signature} with Tx ${txn1Signature} landed`);
     trade.landed = true;
   }
 
@@ -160,16 +160,11 @@ async function sendBundle(bundleIterator: AsyncGenerator<Arb>): Promise<void> {
 
         timings.bundleSent = now;
         logger.info(
-          `chain timings: pre sim: ${
-            timings.preSimEnd - timings.mempoolEnd
-          }ms, sim: ${timings.simEnd - timings.preSimEnd}ms, post sim: ${
-            timings.postSimEnd - timings.simEnd
-          }ms, arb calc: ${
-            timings.calcArbEnd - timings.postSimEnd
-          }ms, build bundle: ${
-            timings.buildBundleEnd - timings.calcArbEnd
-          }ms send bundle: ${
-            timings.bundleSent - timings.buildBundleEnd
+          `chain timings: pre sim: ${timings.preSimEnd - timings.mempoolEnd
+          }ms, sim: ${timings.simEnd - timings.preSimEnd}ms, post sim: ${timings.postSimEnd - timings.simEnd
+          }ms, arb calc: ${timings.calcArbEnd - timings.postSimEnd
+          }ms, build bundle: ${timings.buildBundleEnd - timings.calcArbEnd
+          }ms send bundle: ${timings.bundleSent - timings.buildBundleEnd
           }ms ::: total ${now - timings.mempoolEnd}ms`,
         );
 
@@ -191,16 +186,11 @@ async function sendBundle(bundleIterator: AsyncGenerator<Arb>): Promise<void> {
       .catch((error) => {
         timings.bundleSent = now;
         logger.debug(
-          `chain timings: pre sim: ${
-            timings.preSimEnd - timings.mempoolEnd
-          }ms, sim: ${timings.simEnd - timings.preSimEnd}ms, post sim: ${
-            timings.postSimEnd - timings.simEnd
-          }ms, arb calc: ${
-            timings.calcArbEnd - timings.postSimEnd
-          }ms, build bundle: ${
-            timings.buildBundleEnd - timings.calcArbEnd
-          }ms send bundle: ${
-            timings.bundleSent - timings.buildBundleEnd
+          `chain timings: pre sim: ${timings.preSimEnd - timings.mempoolEnd
+          }ms, sim: ${timings.simEnd - timings.preSimEnd}ms, post sim: ${timings.postSimEnd - timings.simEnd
+          }ms, arb calc: ${timings.calcArbEnd - timings.postSimEnd
+          }ms, build bundle: ${timings.buildBundleEnd - timings.calcArbEnd
+          }ms send bundle: ${timings.bundleSent - timings.buildBundleEnd
           }ms ::: total ${now - timings.mempoolEnd}ms`,
         );
 
@@ -212,6 +202,10 @@ async function sendBundle(bundleIterator: AsyncGenerator<Arb>): Promise<void> {
           logger.error(
             'Error sending bundle: Bundle Dropped, no connected leader up soon.',
           );
+        } else if (error?.message?.includes('RESOURCE_EXHAUSTED')) {
+          logger.error('Error sending bundle: Rate limited');
+        } else if (error?.message) {
+          logger.warn('Error sending bundle: ' + error.message)
         } else {
           logger.error(error, 'Error sending bundle');
         }

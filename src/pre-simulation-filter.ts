@@ -16,7 +16,7 @@ const SKIP_TX_IF_CONTAINS_ADDRESS = [
 ];
 
 // const HIGH_WATER_MARK = 2500;
-const MAX_MEMPOOL_AGE_MS = 100;
+const MAX_MEMPOOL_AGE_MS = 50;
 
 type FilteredTransaction = {
   txn: VersionedTransaction;
