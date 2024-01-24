@@ -48,9 +48,10 @@ const stringifier = stringify({
 });
 stringifier.pipe(bundlesCsv);
 
-const searcherClients = searcherClientManager.getAllClients();
+const searcherSendClients = searcherClientManager.getAllSendClients();
+const searcherMempoolClients = searcherClientManager.getAllMempoolClients();
 
-for (const [i, client] of searcherClients.entries()) {
+for (const [i, client] of searcherSendClients.entries()) {
   client.onBundleResult(
     (bundleResult) => {
       const bundle: BundleCSV = {
@@ -104,7 +105,7 @@ async function dispatchMempoolUpdatesIndividually(txns: VersionedTransaction[]) 
 
 const generators: AsyncGenerator<VersionedTransaction[]>[] = [];
 // subscribe to the default client
-for (const client of searcherClients) {
+for (const client of searcherMempoolClients) {
   generators.push(getProgramUpdates(client));
 }
 

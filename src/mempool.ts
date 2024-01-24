@@ -32,7 +32,7 @@ async function* mempool(): AsyncGenerator<MempoolUpdate> {
 
   try {
     // subscribe to the default client
-    generators.push(getProgramUpdates(searcherClientManager.getDefaultClient()));
+    generators.push(getProgramUpdates(searcherClientManager.getDefaultMempoolClient()));
 
     // subscribing to multiple mempools is in particular useful in europe (frankfurt and amsterdam)
     const updates = fuseGenerators(generators);

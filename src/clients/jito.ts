@@ -21,34 +21,46 @@ function readKeypairFromFile(path: string): Keypair {
 const keypairs = AUTH_KEYPAIR_PATHS.map(readKeypairFromFile);
 
 class RoundRobinSearcherClientManager {
-  private clients: searcher.SearcherClient[];
-  private index: number;
+  private mempoolClients: searcher.SearcherClient[] = [];
+  private sendClients: searcher.SearcherClient[] = [];
+  private sendIndex: number;
 
   constructor(urls: string[], keypairs: Keypair[]) {
-    this.clients = [];
-    urls.forEach((url) => {
-      keypairs.forEach((keypair) => {
-        const client = searcher.searcherClient(url, keypair, {
-          'grpc.keepalive_timeout_ms': 4000,
-        });
-        this.clients.push(client);
+    // we send to only the first url, but rotate keypairs
+    keypairs.forEach((keypair) => {
+      const sendClient = searcher.searcherClient(urls[0], keypair, {
+        'grpc.keepalive_timeout_ms': 4000,
       });
+      this.sendClients.push(sendClient);
     });
-    this.index = 0;
+
+    // we read from all urls for mempool updates, but a single keypair
+    urls.forEach(url => {
+      const readClient = searcher.searcherClient(url, keypairs[0], {
+        'grpc.keepalive_timeout_ms': 4000,
+      });
+      this.mempoolClients.push(readClient);
+    })
+
+    this.sendIndex = 0;
   }
 
-  getNextClient(): searcher.SearcherClient {
-    const client = this.clients[this.index];
-    this.index = (this.index + 1) % this.clients.length;
+  getNextSendClient(): searcher.SearcherClient {
+    const client = this.sendClients[this.sendIndex];
+    this.sendIndex = (this.sendIndex + 1) % this.sendClients.length;
     return client;
   }
 
-  getDefaultClient(): searcher.SearcherClient {
-    return this.clients[0];
+  getAllSendClients(): searcher.SearcherClient[] {
+    return this.sendClients;
   }
 
-  getAllClients(): searcher.SearcherClient[] {
-    return this.clients;
+  getDefaultMempoolClient(): searcher.SearcherClient {
+    return this.mempoolClients[0];
+  }
+
+  getAllMempoolClients(): searcher.SearcherClient[] {
+    return this.mempoolClients;
   }
 }
 

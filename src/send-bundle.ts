@@ -111,7 +111,7 @@ async function sendBundle(bundleIterator: AsyncGenerator<Arb>): Promise<void> {
       continue;
     }
 
-    const searcherSendClient = searcherClientManager.getNextClient();
+    const searcherSendClient = searcherClientManager.getNextSendClient();
 
     searcherSendClient
       .sendBundle(new JitoBundle(bundle, 5))
