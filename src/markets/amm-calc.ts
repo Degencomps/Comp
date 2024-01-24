@@ -86,7 +86,7 @@ async function fetchJupiterQuote(sourceMint: string, destinationMint: string, am
       onlyDirectRoutes: true,
       asLegacyTransaction: false,
       //dexes: INCLUDED_DEXES
-      //excludeDexes: ["Perps"]
+      excludeDexes: ["Perps", "GooseFX"]
     })
 
     return {
