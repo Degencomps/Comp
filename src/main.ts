@@ -51,9 +51,12 @@ stringifier.pipe(bundlesCsv);
 const searcherSendClients = searcherClientManager.getAllSendClients();
 const searcherMempoolClients = searcherClientManager.getAllMempoolClients();
 
+let lastBundleUpdateReceivedAt = Date.now()
 for (const [i, client] of searcherSendClients.entries()) {
   client.onBundleResult(
     (bundleResult) => {
+      lastBundleUpdateReceivedAt = Date.now();
+
       const bundle: BundleCSV = {
         client: i.toString(),
         timestamp: Date.now(),
@@ -70,6 +73,18 @@ for (const [i, client] of searcherSendClients.entries()) {
     },
   );
 }
+
+// Set up an interval to check periodically
+setInterval(() => {
+  const timeDiff = Date.now() - lastBundleUpdateReceivedAt;
+
+  if (timeDiff > 3 * 60 * 1000) {
+    logger.error(`No update received in the last 5 minutes`);
+    throw new Error("No update received in the last 5 minutes...exiting...");
+  }
+
+  logger.info(`Health Checking last bundle updated is ${timeDiff / 1000} seconds ago`);
+}, 60 * 1000); // Check every minute
 
 const getProgramUpdates = (searcherClient: searcher.SearcherClient) =>
   searcherClient.programUpdates(PROGRAMS_OF_INTEREST, [], (error) => {

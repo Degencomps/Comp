@@ -68,7 +68,7 @@ async function processCompletedTrade(uuid: string) {
     });
 
   if (txn1 !== null) {
-    logger.info(`**** Money money: Backrunning ${txn0Signature} with Tx ${txn1Signature} landed`);
+    logger.info(`$$$$$$$$$$$ Backrunning ${txn0Signature} with Tx ${txn1Signature} landed $$$$$$$$$$$`);
     trade.landed = true;
   }
 
