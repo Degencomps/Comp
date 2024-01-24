@@ -95,6 +95,11 @@ const config = convict({
     default: 1,
     env: 'MIN_PRICE_IMPACT_PCT',
   },
+  min_profit_lamports: {
+    format: Number,
+    default: 1000000,
+    env: 'MIN_PROFIT_LAMPORTS',
+  },
   min_sol_trade_size: {
     format: Number,
     default: 500000000,

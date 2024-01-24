@@ -6,8 +6,10 @@ import { config } from './config.js';
 import { logger } from './logger.js';
 import { JupiterDexProgramLabelMap } from './markets/jupiter/index.js';
 import { SPL_TOKEN_SWAP_DEXES } from './markets/spl-token-swap/index.js';
-import { fuseGenerators } from './utils.js';
+import { fuseGenerators, getFormattedTimestamp } from './utils.js';
 import { WorkerPool } from './worker-pool.js';
+import fs from "fs";
+import { stringify } from "csv-stringify";
 
 const NUM_WORKER_THREADS = config.get('num_worker_threads');
 const MAX_BOT_WORKING_TIME_MS = config.get('max_bot_working_time_ms');
@@ -29,6 +31,44 @@ const PROGRAMS_OF_INTEREST = [
 ].map((m) => new PublicKey(m));
 
 logger.debug({ PROGRAMS_OF_INTEREST }, 'programs of interest');
+
+type BundleCSV = {
+  client: string,
+  timestamp: number;
+  bundleId: string
+  accepted: string;
+  rejected: string;
+  finalized: string;
+  dropped: string;
+}
+
+const bundlesCsv = fs.createWriteStream(`bundles_${getFormattedTimestamp()}.csv`, { flags: 'a' });
+const stringifier = stringify({
+  header: true,
+});
+stringifier.pipe(bundlesCsv);
+
+const searcherClients = searcherClientManager.getAllClients();
+
+for (const [i, client] of searcherClients.entries()) {
+  client.onBundleResult(
+    (bundleResult) => {
+      const bundle: BundleCSV = {
+        client: i.toString(),
+        timestamp: Date.now(),
+        bundleId: bundleResult.bundleId,
+        accepted: JSON.stringify(bundleResult.accepted),
+        rejected: JSON.stringify(bundleResult.rejected),
+        finalized: JSON.stringify(bundleResult.finalized),
+        dropped: JSON.stringify(bundleResult.dropped),
+      }
+      stringifier.write(bundle);
+    },
+    (error) => {
+      logger.error({ error }, `onBundleResult error`);
+    },
+  );
+}
 
 const getProgramUpdates = (searcherClient: searcher.SearcherClient) =>
   searcherClient.programUpdates(PROGRAMS_OF_INTEREST, [], (error) => {

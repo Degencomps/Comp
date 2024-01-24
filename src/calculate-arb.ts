@@ -25,7 +25,7 @@ const MINIMUM_SOL_TRADE_SIZE = JSBI.BigInt(config.get('min_sol_trade_size'));
 const MINIMUM_USDC_TRADE_SIZE = JSBI.BigInt(config.get('min_usdc_trade_size'));
 const MINIMUM_PRICE_IMPACT_PCT = config.get('min_price_impact_pct');
 // approx 10c min
-const MIN_PROFIT_LAMPORTS = JSBI.BigInt(Math.floor(0.001 * 1000000000));
+const MIN_PROFIT_LAMPORTS = JSBI.BigInt(config.get('min_profit_lamports'));
 
 const USDC_SOL_PRICE = 100;
 // ratio in lamports
