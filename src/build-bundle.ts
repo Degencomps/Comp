@@ -51,8 +51,6 @@ const MIN_TIP_LAMPORTS = config.get('min_tip_lamports');
 const MAX_TIP_BPS = config.get('max_tip_bps');
 const LEDGER_PROGRAM_ID = config.get('ledger_program')
 const TXN_FEES_LAMPORTS = config.get('txn_fees_lamports'); // transaction fees in lamports TODO: need to consider new token account rents?
-// approx 10c min
-const MIN_PROFIT_LAMPORTS = JSBI.BigInt(Math.floor(0.001 * 1000000000));
 const HIGH_WATER_MARK = 250;
 
 // const MIN_BALANCE_RENT_EXEMPT_TOKEN_ACC =
@@ -190,12 +188,8 @@ async function* buildBundle(
   );
 
   for await (const arbIdea of arbIdeasGreedyPrioritized) {
-    const { txn, expectedProfit, expectedProfitSol, timings, trade, } = arbIdea;
+    const { txn, expectedProfit, timings, trade, } = arbIdea;
     const { in: inAmount, out: outAmount, mirroringLegQuote, balancingLeg, balancingLegFirst, tipBps } = trade;
-
-    if (JSBI.lessThan(expectedProfitSol, MIN_PROFIT_LAMPORTS)) {
-      continue;
-    }
 
     const allRoutesQuoteResponse = createAllRoutesQuoteResponse(
       {
@@ -343,7 +337,6 @@ async function compileJupiterTransaction(
         dynamicComputeUnitLimit: false
       }
     })
-
   } catch (e) {
     logger.debug(e, "error jupiter swapInstructionsPost")
   }
@@ -352,99 +345,105 @@ async function compileJupiterTransaction(
     throw new Error("no swap instructions response")
   }
 
-  const inputMint = balancingLegFirst ? balancingLeg.sourceMint : balancingLeg.destinationMint;
+  const prepareInstructions = async () => {
+    const inputMint = balancingLegFirst ? balancingLeg.sourceMint : balancingLeg.destinationMint;
 
-  const randomSeed = new BN(Math.floor(Math.random() * 1000000));
+    const randomSeed = new BN(Math.floor(Math.random() * 1000000));
 
-  // todo: to optimize this
-  const ledgerAccount = PublicKey.findProgramAddressSync(
-    [Buffer.from("ledger"), wallet.publicKey.toBuffer(), randomSeed.toArrayLike(Buffer, "le", 8)],
-    ledgerProgram.programId
-  )[0];
+    // todo: to optimize this
+    const ledgerAccount = PublicKey.findProgramAddressSync(
+      [Buffer.from("ledger"), wallet.publicKey.toBuffer(), randomSeed.toArrayLike(Buffer, "le", 8)],
+      ledgerProgram.programId
+    )[0];
 
-  const baseTokenATA = getAta(
-    new PublicKey(inputMint),
-    wallet.publicKey
-  );
+    const baseTokenATA = getAta(
+      new PublicKey(inputMint),
+      wallet.publicKey
+    );
 
-  const minimumProfitInBaseToken = inputMint === BASE_MINTS_OF_INTEREST_B58.SOL ? MIN_PROFIT_IN_LAMPORTS : Math.ceil(MIN_PROFIT_IN_LAMPORTS / LAMPORTS_PER_USDC_UNITS)
-  const lamportsPerBaseToken = inputMint === BASE_MINTS_OF_INTEREST_B58.SOL ? 1 : LAMPORTS_PER_USDC_UNITS
+    const minimumProfitInBaseToken = inputMint === BASE_MINTS_OF_INTEREST_B58.SOL ? MIN_PROFIT_IN_LAMPORTS : Math.ceil(MIN_PROFIT_IN_LAMPORTS / LAMPORTS_PER_USDC_UNITS)
+    const lamportsPerBaseToken = inputMint === BASE_MINTS_OF_INTEREST_B58.SOL ? 1 : LAMPORTS_PER_USDC_UNITS
 
-  // manual construct instruction
-  const instructions: TransactionInstruction[] = []
+    // manual construct instruction
+    const instructions: TransactionInstruction[] = []
 
-  // increse compute unit
-  const modifyComputeUnitsIx = ComputeBudgetProgram.setComputeUnitLimit({
-    units: 1000000
-  });
-
-  instructions.push(modifyComputeUnitsIx)
-
-  if (inputMint === BASE_MINTS_OF_INTEREST_B58.SOL) {
-    const wrappedSolAccount = getAta(NATIVE_MINT, wallet.publicKey)
-
-    // transfer sol
-    const transferIx = SystemProgram.transfer({
-      fromPubkey: wallet.publicKey,
-      toPubkey: wrappedSolAccount,
-      lamports: JSBI.toNumber(inAmount)
+    // increse compute unit
+    const modifyComputeUnitsIx = ComputeBudgetProgram.setComputeUnitLimit({
+      units: 1000000
     });
 
-    instructions.push(createWrappedSolAccountIx)
-    instructions.push(transferIx)
-    instructions.push(syncNativeIx)
+    instructions.push(modifyComputeUnitsIx)
+
+    if (inputMint === BASE_MINTS_OF_INTEREST_B58.SOL) {
+      const wrappedSolAccount = getAta(NATIVE_MINT, wallet.publicKey)
+
+      // transfer sol
+      const transferIx = SystemProgram.transfer({
+        fromPubkey: wallet.publicKey,
+        toPubkey: wrappedSolAccount,
+        lamports: JSBI.toNumber(inAmount)
+      });
+
+      instructions.push(createWrappedSolAccountIx)
+      instructions.push(transferIx)
+      instructions.push(syncNativeIx)
+    }
+
+    const startLedgerIx = await ledgerProgram.methods
+      .startLedger(randomSeed)
+      .accountsStrict({
+        signer: wallet.publicKey,
+        monitorAta: baseTokenATA,
+        ledgerAccount,
+        instructions: SYSVAR_INSTRUCTIONS_PUBKEY,
+        systemProgram: SystemProgram.programId,
+      })
+      .instruction();
+
+    instructions.push(startLedgerIx)
+
+    if (allSwapInstructionsResponse.tokenLedgerInstruction) {
+      instructions.push(deserializeSwapInstruction(allSwapInstructionsResponse.tokenLedgerInstruction))
+    }
+
+    instructions.push(deserializeSwapInstruction(allSwapInstructionsResponse.swapInstruction))
+
+    // if sol is base, sync native
+    if (inputMint === BASE_MINTS_OF_INTEREST_B58.SOL) {
+      instructions.push(syncNativeIx)
+    }
+
+    const endLedgerIx = await ledgerProgram.methods
+      .endLedger(
+        randomSeed,
+        new BN(minimumProfitInBaseToken), // minimum profit in base token
+        lamportsPerBaseToken,
+        new BN(tipBps), // tip bps of the (profit minus minimum profit in base token) TODO: dynamic tip in custom program
+        new BN(MAX_TIP_BPS), // max tip bps of the sol balance
+        new BN(MIN_TIP_LAMPORTS), // requires tip > min tip amount
+      )
+      .accountsStrict({
+        signer: wallet.publicKey,
+        monitorAta: baseTokenATA,
+        ledgerAccount,
+        tipAccount: getRandomTipAccount(),
+        instructions: SYSVAR_INSTRUCTIONS_PUBKEY,
+        systemProgram: SystemProgram.programId,
+      })
+      .instruction();
+
+    instructions.push(endLedgerIx)
+
+    if (inputMint === BASE_MINTS_OF_INTEREST_B58.SOL) {
+      instructions.push(closeWrappedSolAccountIx)
+    }
+    return instructions;
   }
 
-  const startLedgerIx = await ledgerProgram.methods
-    .startLedger(randomSeed)
-    .accountsStrict({
-      signer: wallet.publicKey,
-      monitorAta: baseTokenATA,
-      ledgerAccount,
-      instructions: SYSVAR_INSTRUCTIONS_PUBKEY,
-      systemProgram: SystemProgram.programId,
-    })
-    .instruction();
-
-  instructions.push(startLedgerIx)
-
-  if (allSwapInstructionsResponse.tokenLedgerInstruction) {
-    instructions.push(deserializeSwapInstruction(allSwapInstructionsResponse.tokenLedgerInstruction))
-  }
-
-  instructions.push(deserializeSwapInstruction(allSwapInstructionsResponse.swapInstruction))
-
-  // if sol is base, sync native
-  if (inputMint === BASE_MINTS_OF_INTEREST_B58.SOL) {
-    instructions.push(syncNativeIx)
-  }
-
-  const endLedgerIx = await ledgerProgram.methods
-    .endLedger(
-      randomSeed,
-      new BN(minimumProfitInBaseToken), // minimum profit in base token
-      lamportsPerBaseToken,
-      new BN(tipBps), // tip bps of the (profit minus minimum profit in base token) TODO: dynamic tip in custom program
-      new BN(MAX_TIP_BPS), // max tip bps of the sol balance
-      new BN(MIN_TIP_LAMPORTS), // requires tip > min tip amount
-    )
-    .accountsStrict({
-      signer: wallet.publicKey,
-      monitorAta: baseTokenATA,
-      ledgerAccount,
-      tipAccount: getRandomTipAccount(),
-      instructions: SYSVAR_INSTRUCTIONS_PUBKEY,
-      systemProgram: SystemProgram.programId,
-    })
-    .instruction();
-
-  instructions.push(endLedgerIx)
-
-  if (inputMint === BASE_MINTS_OF_INTEREST_B58.SOL) {
-    instructions.push(closeWrappedSolAccountIx)
-  }
-
-  const addressLookupTableAccounts = await getAddressLookupTableAccounts(allSwapInstructionsResponse.addressLookupTableAddresses)
+  const [instructions, addressLookupTableAccounts,] = await Promise.all([
+    prepareInstructions(),
+    getAddressLookupTableAccounts(allSwapInstructionsResponse.addressLookupTableAddresses)
+  ])
 
   const messageV0 = new TransactionMessage({
     payerKey: wallet.publicKey,

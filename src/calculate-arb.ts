@@ -24,6 +24,8 @@ const HIGH_WATER_MARK = 500;
 const MINIMUM_SOL_TRADE_SIZE = JSBI.BigInt(config.get('min_sol_trade_size'));
 const MINIMUM_USDC_TRADE_SIZE = JSBI.BigInt(config.get('min_usdc_trade_size'));
 const MINIMUM_PRICE_IMPACT_PCT = config.get('min_price_impact_pct');
+// approx 10c min
+const MIN_PROFIT_LAMPORTS = JSBI.BigInt(Math.floor(0.001 * 1000000000));
 
 const USDC_SOL_PRICE = 100;
 // ratio in lamports
@@ -182,6 +184,7 @@ in ${timings.postSimEnd - timings.mempoolEnd}ms`);
       continue;
     }
 
+
     const bestQuoteResult = await calculateJupiterBestQuote(
       balancingLeg,
       mirroringLeg,
@@ -194,6 +197,12 @@ in ${timings.postSimEnd - timings.mempoolEnd}ms`);
 
     const profitBN = JSBI.BigInt(profit)
     const profitInSolLamports = sourceIsUsdc ? JSBI.multiply(profitBN, JSBI.BigInt(USDC_SOL_RATIO.toString())) : profitBN
+
+    // skip if expected profit is too small
+    if (JSBI.lessThan(profitInSolLamports, MIN_PROFIT_LAMPORTS)) {
+      logger.debug(`Skipping arb idea bcs profit is too small`);
+      continue;
+    }
 
     const decimals = sourceIsUsdc ? USDC_DECIMALS : SOL_DECIMALS;
     const backrunSourceMintName = sourceIsUsdc ? 'USDC' : 'SOL';

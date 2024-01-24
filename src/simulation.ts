@@ -99,7 +99,7 @@ async function* simulate(
 
     const { txn, response, accountsOfInterest, timings } =
       simulationResults.dequeue();
-    logger.debug(`Simulation took ${Date.now() - timings.preSimEnd}ms`);
+    logger.trace(`Simulation took ${Date.now() - timings.preSimEnd}ms`);
     const txnAge = Date.now() - timings.mempoolEnd;
 
     if (txnAge > MAX_SIMULATION_AGE_MS) {
